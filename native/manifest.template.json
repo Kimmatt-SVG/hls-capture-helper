@@ -1,0 +1,7 @@
+{
+  "name": "hls_capture_helper",
+  "description": "Launches FFmpeg for authorized HLS playlist archiving.",
+  "path": "__HELPER_PATH__",
+  "type": "stdio",
+  "allowed_extensions": ["hls-capture-helper@example.local"]
+}

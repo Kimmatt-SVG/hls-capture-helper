@@ -1,0 +1,28 @@
+{
+  "manifest_version": 2,
+  "name": "HLS Capture Helper",
+  "version": "0.1.0",
+  "description": "Detect authorized HLS playlist URLs in the active tab and prepare FFmpeg archive commands.",
+  "permissions": [
+    "activeTab",
+    "clipboardWrite",
+    "nativeMessaging",
+    "tabs",
+    "webRequest",
+    "<all_urls>"
+  ],
+  "background": {
+    "scripts": ["src/background.js"],
+    "persistent": true
+  },
+  "browser_action": {
+    "default_title": "HLS Capture Helper",
+    "default_popup": "src/popup.html"
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "hls-capture-helper@example.local",
+      "strict_min_version": "109.0"
+    }
+  }
+}

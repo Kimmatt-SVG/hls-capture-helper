@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>HLS Capture Helper</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <h1>HLS Capture</h1>
+        <p id="status">Looking for playlists in this tab.</p>
+      </div>
+      <button id="refresh" type="button" title="Refresh detected playlists">Refresh</button>
+    </header>
+
+    <main>
+      <section id="empty" class="empty" hidden>
+        <p>No HLS playlists detected yet.</p>
+      </section>
+
+      <section id="list" class="playlist-list" aria-label="Detected playlists"></section>
+    </main>
+
+    <footer>
+      <button id="clear" type="button">Clear</button>
+      <span>Use only for streams you are authorized to archive.</span>
+    </footer>
+
+    <template id="playlist-row">
+      <article class="playlist">
+        <div class="playlist-main">
+          <div class="playlist-meta">
+            <span class="badge"></span>
+            <span class="seen"></span>
+          </div>
+          <p class="url"></p>
+        </div>
+        <div class="actions">
+          <button class="copy-url" type="button">Copy URL</button>
+          <button class="copy-command" type="button">Copy FFmpeg</button>
+          <button class="native-save" type="button">Run Helper</button>
+          <button class="native-stop" type="button" hidden>Stop</button>
+        </div>
+        <div class="job-progress" hidden>
+          <div class="progress-bar"><span></span></div>
+          <p class="job-status"></p>
+          <p class="job-log"></p>
+        </div>
+      </article>
+    </template>
+
+    <script src="popup.js"></script>
+  </body>
+</html>

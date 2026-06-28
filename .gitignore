@@ -1,0 +1,48 @@
+# OS/editor artifacts
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.swp
+*.swo
+*~
+
+# Runtime logs and temporary files
+*.log
+*.tmp
+*.temp
+tmp/
+temp/
+
+# Node/browser-extension tooling artifacts
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+web-ext-artifacts/
+*.zip
+
+# Python/native-host runtime artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+env/
+
+# HLS capture/download outputs
+downloads/
+captures/
+recordings/
+output/
+*.m3u8
+*.ts
+*.m4s
+*.mp4
+*.mkv
+*.mov
+*.aac
+*.mp3
