@@ -1,0 +1,76 @@
+{
+  "name": "movie-stream-downloader",
+  "version": "1.0.0",
+  "description": "Desktop browser with HLS stream download to MP4",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "start:anime": "electron . --anime",
+    "build": "electron-builder --win",
+    "build:portable": "electron-builder --win portable"
+  },
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^35.0.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.movieengine.streamdownloader",
+    "productName": "Movie Stream Downloader",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "shell.html",
+      "shell.css",
+      "shell.js",
+      "anime-config.json",
+      "lib/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "nas-config.example.json",
+        "to": "nas-config.json"
+      },
+      {
+        "from": "nav-config.json",
+        "to": "nav-config.json"
+      },
+      {
+        "from": "anime-config.json",
+        "to": "anime-config.json"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  },
+  "allowScripts": {
+    "electron@35.7.5": true
+  },
+  "dependencies": {
+    "@ghostery/adblocker-electron": "^2.18.0",
+    "cross-fetch": "^4.1.0"
+  }
+}

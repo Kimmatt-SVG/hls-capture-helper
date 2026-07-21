@@ -1,41 +1,123 @@
 # HLS Capture Helper
 
-A developer Firefox/Zen extension for archiving HLS (`.m3u8`) playlists your browser session is **already authorized to load**. It watches the active tab for playlist requests, lists them in the popup, and builds an FFmpeg command for each one.
+HLS Capture Helper is a toolkit for saving authorized HTTP Live Streaming (HLS) media. It includes:
 
-> For lawful, authorized capture only — your own streams, internal test content, or material you have explicit permission to archive. It does **not** bypass access controls, decrypt DRM, or remove copy protection. DRM-protected streams are not supported.
+- a Firefox/Zen browser extension that detects `.m3u8` requests and builds FFmpeg commands;
+- an optional native-messaging helper for authenticated streams; and
+- a Windows Electron application with an embedded browser, download queues, movie and episodic workflows, anime mode, and local or NAS output.
 
-## Prerequisites
+> Use this project only for streams you own or have explicit permission to archive. It does not bypass DRM, decrypt protected media, or remove access controls. DRM-protected streams are unsupported.
 
-- **Zen Browser or Firefox** (supports temporary add-on loading via `about:debugging`).
-- **`ffmpeg`** installed and on your `PATH`.
-- **Python 3** — only if you want the optional native helper (the `Run Helper` button).
-- **macOS or Linux** — only for the native helper install scripts.
+## Features
 
-## Quick Start
+- Detects HLS master and media playlists from browser traffic
+- Preserves required browser-session headers for authorized downloads
+- Selects and validates playable video variants before starting FFmpeg
+- Downloads direct files or HLS streams to MP4
+- Supports movie queues and season-based episode downloads
+- Provides a separate anime-focused window with dub-first server selection
+- Saves locally or to a configured Windows/NAS destination
+- Tracks progress, speed, output size, failures, and FFmpeg diagnostics
+- Filters popups and common advertising traffic in the embedded browser
+- Builds installable and portable Windows executables
 
-1. Open `about:debugging#/runtime/this-firefox` in Zen or Firefox.
-2. Click **Load Temporary Add-on…** and select `manifest.json` from this folder.
-3. Open the page with your authorized HLS video and start playback.
-4. Open the **HLS Capture Helper** popup — detected playlists appear in the list.
-5. Click **Copy FFmpeg** next to a playlist, then paste and run the command in a terminal.
+## Repository Layout
 
-That's the whole flow. The copied command includes safe replay headers (`Referer`, `Origin`, `User-Agent`, `Accept`) and intentionally omits sensitive ones (`Cookie`, `Authorization`, `x-*`).
+- `src/` — Firefox/Zen extension UI and request capture
+- `native/` — Python native-messaging host
+- `scripts/` — helper installation and FFmpeg wrapper scripts
+- `desktop/` — Electron desktop application
 
-> Temporary add-ons are removed when the browser restarts — reload from `about:debugging` after a restart.
+## Desktop App (Windows)
 
-### Alternative: wrapper script
+### Requirements
 
-You can skip the copy step and run a playlist directly:
+- Windows 10 or later
+- Node.js 20 or later
+- FFmpeg and FFprobe available on `PATH`
 
-```bash
-scripts/run_ffmpeg_for_playlist.sh "https://example.edu/path/playlist.m3u8" "practice-video.mp4"
+Install FFmpeg with WinGet:
+
+```powershell
+winget install Gyan.FFmpeg
 ```
 
-## Optional: Native Helper
+Restart the terminal after installation, then install dependencies:
 
-Browser extensions can't launch local programs, so the **`Run Helper`** button uses Native Messaging to ask a local script to start FFmpeg. This is what you need when a site requires the **sensitive** session headers (`Cookie`, `Authorization`, `x-*`) that copied commands omit.
+```powershell
+cd desktop
+npm install
+```
 
-Install it (the script copies the helper into the browser's native-messaging directory and points the manifest at it):
+Run the movie application:
+
+```powershell
+npm start
+```
+
+Run the separate anime application:
+
+```powershell
+npm run start:anime
+```
+
+### Build Windows Packages
+
+```powershell
+cd desktop
+npm run build
+```
+
+The NSIS installer and portable executable are written to `desktop/dist/`. Build artifacts are intentionally excluded from Git.
+
+### NAS Configuration
+
+Copy the example configuration and edit it for your environment:
+
+```powershell
+Copy-Item nas-config.example.json nas-config.json
+```
+
+You can also set:
+
+```powershell
+$env:NAS_PORTAL_URL = "https://nas.example.test/"
+$env:NAS_VIDEO_FOLDER = "\\NAS\Media\Videos"
+```
+
+`desktop/nas-config.json` is machine-specific and ignored by Git.
+
+### Desktop Workflow
+
+1. Open a supported page in the embedded browser.
+2. Start playback or open the site's authorized download controls.
+3. For a movie, add it to the queue or start a direct download.
+4. For a series, open a season/show page and scan the available episodes.
+5. Choose local or NAS output and monitor progress in the activity panel.
+
+The anime window uses its own persistent browser session and tries English-dub servers before subtitle servers when both are available.
+
+## Browser Extension
+
+### Requirements
+
+- Firefox or Zen Browser
+- FFmpeg on `PATH`
+- Python 3 only when using the native helper
+
+### Load Temporarily
+
+1. Open `about:debugging#/runtime/this-firefox`.
+2. Select **Load Temporary Add-on…**.
+3. Choose this repository's `manifest.json`.
+4. Open an authorized HLS video and begin playback.
+5. Open the extension popup and copy the generated FFmpeg command.
+
+Temporary add-ons are removed when the browser restarts.
+
+### Native Helper
+
+Browser extensions cannot launch FFmpeg directly. The native helper forwards the session headers required by authenticated streams:
 
 ```bash
 # Zen (default)
@@ -45,48 +127,56 @@ scripts/install_native_host.sh
 scripts/install_native_host.sh firefox
 ```
 
-Then reload the temporary add-on from `about:debugging`. Make sure `ffmpeg` is on your `PATH` — the helper also checks `/opt/homebrew/bin`, `/usr/local/bin`, and `/usr/bin`.
-
-### Uninstall
+Uninstall with:
 
 ```bash
-# Zen (default)
 scripts/uninstall_native_host.sh
-
-# Firefox
 scripts/uninstall_native_host.sh firefox
 ```
 
-Reload or restart the browser afterward, and remove the temporary add-on from `about:debugging` if desired.
+Without the native helper, copied commands omit sensitive `Cookie`, `Authorization`, and `x-*` headers.
 
-## Output & Progress
+## Configuration
 
-Native helper output goes to `~/Downloads/HLS Capture Helper/`. Override it before launching the browser:
+Useful environment variables include:
 
-```bash
-export HLS_CAPTURE_OUTPUT_DIR="$HOME/Videos/HLS Capture Helper"
+- `HLS_CAPTURE_OUTPUT_DIR` — override the local output directory
+- `STREAM_SITE_HOME_URL` — override the desktop movie home URL
+- `STREAM_SITE_URL` — fallback movie site URL
+- `NAS_PORTAL_URL` — override the NAS portal address
+- `NAS_VIDEO_FOLDER` — override the NAS video directory
+
+Site navigation and anime embed allowlists live in `desktop/nav-config.json` and `desktop/anime-config.json`.
+
+## Security and Privacy
+
+- Playlist URLs may contain short-lived signatures or tokens.
+- Request headers, FFmpeg logs, shell history, and local process inspection can expose session details.
+- Never publish cookies, authorization headers, signed URLs, private hostnames, or NAS credentials.
+- Review and redact diagnostics before attaching them to an issue.
+- Protect downloaded media and configuration files according to their sensitivity.
+
+## Troubleshooting
+
+- **No stream appears:** start playback and wait for the player to request its playlist.
+- **FFmpeg is missing:** restart the terminal after installation and verify `ffmpeg -version`.
+- **HTTP 401/403:** refresh the page so the app captures a current token and session.
+- **Only a `.log` remains:** FFmpeg rejected the stream; inspect the final lines for an HTTP, token, codec, or playlist error.
+- **NAS write fails:** verify the UNC path, Windows credentials, and share permissions.
+- **Anime server fails:** reload the episode; the app will try available dub servers first and then fall back.
+
+## Development
+
+There is no committed generated output. Before opening a pull request:
+
+```powershell
+cd desktop
+npm install
+npm run build
 ```
 
-- Each run gets a `.log` file next to its output.
-- While the popup is open, `Run Helper` shows live progress (state, media time, speed, size, latest log line). **Stop** ends a job cleanly.
-- Job metadata and progress files live under `~/Downloads/HLS Capture Helper/jobs/`.
-- The helper writes `native-helper.log` to the output directory, falling back to `/private/tmp/hls_capture_helper_native.log`.
-
-## Security Notes
-
-- Playlist requests can carry sensitive session context. The native helper forwards headers like `Cookie`, `Referer`, `Origin`, `User-Agent`, `Authorization`, and `x-*` to FFmpeg for authenticated downloads.
-- Copied URLs and commands can contain signed/tokenized playlist URLs. Clear your clipboard after use if you sync clipboard history across devices.
-- The helper redacts URLs in its own logs and job metadata, but local process tools may still expose FFmpeg arguments while a job runs.
-- FFmpeg logs, helper logs, job metadata, and shell history may contain playlist URLs. Review before sharing.
-- Protect the output directory according to the sensitivity of the source material.
-- Never paste copied commands, logs, or job files into issue reports without stripping cookies, authorization headers, signed URLs, and private hostnames.
-
-## HLS Notes
-
-- A **master** playlist lists variants/qualities; a **media** playlist lists the timed segment URLs.
-- FFmpeg handles either, but a media playlist is the most direct target.
-- Encrypted HLS works only when the playlist exposes keys your browser is authorized to fetch. DRM-protected streams are not supported.
+At minimum, run JavaScript syntax checks for changed source files and verify both `npm start` and `npm run start:anime`.
 
 ## License
 
-MIT. See `LICENSE`.
+MIT. See [LICENSE](LICENSE).

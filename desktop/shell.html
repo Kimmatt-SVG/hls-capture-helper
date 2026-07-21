@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Movie Stream Downloader</title>
+    <link rel="stylesheet" href="shell.css" />
+  </head>
+  <body>
+    <div class="ambient-bg" aria-hidden="true">
+      <span class="orb orb-1"></span>
+      <span class="orb orb-2"></span>
+      <span class="orb orb-3"></span>
+    </div>
+
+    <header class="toolbar">
+      <div class="toolbar-primary">
+        <div class="brand">
+          <strong id="brand-title">Movie Stream Downloader</strong>
+          <span id="stream-status" class="muted">Waiting for stream...</span>
+          <div class="status-badges">
+            <span id="adblock-status" class="status-badge">Ad blocker active</span>
+            <span id="redirect-status" class="status-badge">Redirect protection on</span>
+          </div>
+        </div>
+
+        <form id="toolbar-search-form" class="toolbar-search" autocomplete="off">
+          <input
+            id="toolbar-search-input"
+            type="search"
+            placeholder="Search movies (e.g. avengers endgame)"
+            aria-label="Search movies"
+          />
+          <button type="submit" class="primary">Search</button>
+        </form>
+      </div>
+
+      <div class="actions">
+        <div class="nav-group">
+          <button id="go-back" type="button" class="nav secondary" title="Back" disabled aria-label="Back">←</button>
+          <button id="go-forward" type="button" class="nav secondary" title="Forward" disabled aria-label="Forward">→</button>
+        </div>
+        <button id="reload-site" type="button" class="secondary" title="Reload the current page">Reload Page</button>
+        <button id="refresh-detect" type="button" class="secondary" title="Refresh stream detection">Refresh Stream</button>
+        <button id="stream-debug" type="button" class="secondary" title="Show captured streams and ffprobe results">Stream Debug</button>
+        <button id="open-anime-window" type="button" class="secondary" title="Open a separate window for anime">Anime Window</button>
+        <button id="open-folder" type="button" class="secondary">Open Movies Folder</button>
+        <button id="connect-nas" type="button" class="secondary" title="Sign in to NAS share">Connect NAS</button>
+        <button id="connect-site" type="button" class="secondary" title="Save Tornado Movies login">Site Login</button>
+        <button id="sync-to-nas" type="button" class="secondary" title="Copy all PC movies to NAS (skip existing)">Sync to NAS</button>
+        <button id="save-nas" type="button" class="accent">Save to NAS</button>
+        <button id="download" type="button" class="primary">Download MP4</button>
+        <button id="stop-download" type="button" class="danger" hidden>Stop</button>
+      </div>
+    </header>
+
+    <section class="status-bar">
+      <span id="env-status"></span>
+      <span id="download-status"></span>
+    </section>
+
+    <section id="search-panel" class="search-panel">
+      <div class="search-card">
+        <h1 id="landing-title">What do you want to watch?</h1>
+        <p id="landing-lead" class="search-lead">
+          Search for a movie, play it in the built-in browser, then save it as MP4 to your
+          PC or NAS. Streams are captured automatically while you watch.
+        </p>
+        <ul class="search-features" id="search-features">
+          <li>Ad blocking and redirect protection while browsing</li>
+          <li>Best-quality stream detection</li>
+          <li>Downloads saved to your Movies folder with poster art</li>
+        </ul>
+        <form id="search-form" class="search-form" autocomplete="off">
+          <input
+            id="search-input"
+            type="search"
+            placeholder="e.g. inception, avengers endgame"
+            aria-label="Search movies"
+          />
+          <button type="submit" class="primary">Search</button>
+        </form>
+        <button id="browse-home" type="button" class="secondary browse-home">Browse Tornado Movies</button>
+        <p id="search-error" class="search-error"></p>
+      </div>
+    </section>
+
+    <section id="blocked-panel" class="blocked-panel" hidden>
+      <div class="blocked-card">
+        <h1>This website might be blocked</h1>
+        <p>
+          The page could not load on your current network. Your ISP, school, or workplace
+          may be blocking access to this site.
+        </p>
+        <p>Try one of these options:</p>
+        <ul>
+          <li>Switch to a cellular connection</li>
+          <li>Use a mobile hotspot</li>
+          <li>Connect through a VPN</li>
+        </ul>
+        <p class="vpn-note">
+          Recommended VPN: <strong>1.1.1.1</strong> (Cloudflare WARP)
+        </p>
+        <div class="blocked-actions">
+          <a
+            id="warp-download-link"
+            class="text-link"
+            href="https://one.one.one.one/"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Download 1.1.1.1
+          </a>
+          <button id="install-warp" type="button" class="primary">Install 1.1.1.1 VPN</button>
+          <button id="retry-load" type="button" class="secondary">Try Again</button>
+        </div>
+        <p id="blocked-detail" class="blocked-detail"></p>
+        <p id="install-status" class="install-status"></p>
+      </div>
+    </section>
+
+    <footer id="progress-dock" class="progress-dock" hidden>
+      <div id="progress-dock-body" class="progress-dock-body">
+        <div class="progress-top">
+          <strong id="progress-phase">Preparing download...</strong>
+          <span id="progress-percent">0%</span>
+        </div>
+        <div id="progress-track" class="progress-track">
+          <div id="progress-fill" class="progress-fill"></div>
+        </div>
+        <div class="progress-bottom">
+          <span id="progress-detail-left">Waiting to start...</span>
+          <span id="progress-detail-right"></span>
+        </div>
+      </div>
+    </footer>
+
+    <aside id="nas-connect-panel" class="nas-connect-panel" hidden>
+      <form id="nas-connect-form" class="nas-connect-card">
+        <strong>Sign in to NAS</strong>
+        <p class="nas-connect-intro">Enter the username and password for your NAS share.</p>
+        <label class="nas-connect-field">
+          <span>Username</span>
+          <input id="nas-username" type="text" autocomplete="username" placeholder="e.g. admin" />
+        </label>
+        <label class="nas-connect-field">
+          <span>Password</span>
+          <input id="nas-password" type="password" autocomplete="current-password" />
+        </label>
+        <p id="nas-connect-error" class="nas-connect-error"></p>
+        <div class="nas-connect-actions">
+          <button id="nas-connect-cancel" type="button" class="secondary">Cancel</button>
+          <button id="nas-connect-save" type="submit" class="accent">Connect</button>
+        </div>
+      </form>
+    </aside>
+
+    <aside id="site-connect-panel" class="nas-connect-panel" hidden>
+      <form id="site-connect-form" class="nas-connect-card">
+        <strong>Tornado Movies Login</strong>
+        <p class="nas-connect-intro">
+          Save your account here. The app will open the login page and submit it automatically.
+        </p>
+        <label class="nas-connect-field">
+          <span>Username or Email</span>
+          <input id="site-username" type="text" autocomplete="username" placeholder="Your Tornado Movies username" />
+        </label>
+        <label class="nas-connect-field">
+          <span>Password</span>
+          <input id="site-password" type="password" autocomplete="current-password" />
+        </label>
+        <label class="nas-connect-field site-auto-login-field">
+          <input id="site-auto-login" type="checkbox" checked />
+          <span>Auto-login when opening the site login page</span>
+        </label>
+        <p id="site-connect-error" class="nas-connect-error"></p>
+        <div class="nas-connect-actions">
+          <button id="site-connect-cancel" type="button" class="secondary">Cancel</button>
+          <button id="site-connect-save" type="submit" class="accent">Save &amp; Login</button>
+        </div>
+      </form>
+    </aside>
+
+    <aside id="library-sidebar" class="library-sidebar" aria-label="Activity log and downloads">
+      <div id="mode-tabs" class="mode-tabs" role="tablist" aria-label="Download mode">
+        <button id="mode-tab-movies" type="button" class="mode-tab active" data-mode="movies" role="tab" aria-selected="true">
+          Movies
+        </button>
+        <button id="mode-tab-tv" type="button" class="mode-tab" data-mode="tv" role="tab" aria-selected="false">
+          TV Shows
+        </button>
+      </div>
+
+      <section id="download-queue-section" class="download-queue-section">
+        <div class="download-queue-head">
+          <div>
+            <strong>Download Queue</strong>
+            <span id="download-queue-summary" class="download-queue-summary">0 movies queued</span>
+          </div>
+        </div>
+        <div class="download-queue-actions">
+          <button id="add-search-to-queue" type="button" class="secondary" title="Add all movies from the current search results page">
+            Add Search Results
+          </button>
+          <button id="add-current-to-queue" type="button" class="secondary" title="Add the open movie page to the queue">
+            Add Current Movie
+          </button>
+          <button id="start-download-queue-local" type="button" class="primary">Queue → PC</button>
+          <button id="start-download-queue-nas" type="button" class="accent">Queue → NAS</button>
+          <button id="stop-download-queue" type="button" class="danger" hidden>Stop Queue</button>
+          <button id="clear-download-queue" type="button" class="secondary">Clear</button>
+          <button id="queue-debug-copy" type="button" class="secondary" title="Copy queue debug log">Queue Debug</button>
+        </div>
+        <ul id="download-queue-list" class="download-queue-list">
+          <li class="download-queue-empty">Add movie pages to the queue. Each download gets a fresh link right before it starts.</li>
+        </ul>
+      </section>
+
+      <section id="tv-show-section" class="tv-show-section" hidden>
+        <div class="tv-show-head">
+          <div>
+            <strong id="tv-show-title">TV Show Mode</strong>
+            <span class="tv-show-badge">Prototype</span>
+            <span id="tv-show-summary" class="tv-show-summary">Open a season page, then scan it</span>
+          </div>
+        </div>
+        <p class="tv-show-lead">
+          Open an Aniwave series page, scan its episodes, then download each one. English dub is tried first when available.
+        </p>
+        <div class="tv-show-actions">
+          <button id="scan-tv-show" type="button" class="secondary">Scan Current Season</button>
+          <button id="start-tv-show-local" type="button" class="primary" disabled>Download Episodes → PC</button>
+          <button id="start-tv-show-nas" type="button" class="accent" disabled>Download Episodes → NAS</button>
+          <button id="stop-tv-show" type="button" class="danger" hidden>Stop TV Download</button>
+          <button id="clear-tv-show-plan" type="button" class="secondary">Clear Plan</button>
+        </div>
+        <ul id="tv-show-episode-list" class="tv-show-episode-list">
+          <li class="tv-show-empty">No TV show scanned yet.</li>
+        </ul>
+      </section>
+
+      <section class="activity-log-section">
+        <div class="activity-log-head">
+          <div>
+            <strong>Activity Log</strong>
+            <span class="activity-log-hint">Errors and stream debug stay here</span>
+          </div>
+          <div class="activity-log-actions">
+            <button id="activity-log-copy" type="button" class="library-refresh" title="Copy log">⎘</button>
+            <button id="activity-log-clear" type="button" class="library-refresh" title="Clear log">×</button>
+          </div>
+        </div>
+        <div id="activity-log" class="activity-log" aria-live="polite">
+          <p class="activity-log-empty">Download and stream events will appear here.</p>
+        </div>
+      </section>
+
+      <div class="library-header">
+        <div>
+          <strong>Downloads</strong>
+          <span id="library-summary" class="library-summary">Scanning...</span>
+        </div>
+        <button id="refresh-library" type="button" class="library-refresh" title="Refresh list">↻</button>
+      </div>
+      <div id="library-sections" class="library-sections"></div>
+    </aside>
+
+    <script src="shell.js"></script>
+  </body>
+</html>

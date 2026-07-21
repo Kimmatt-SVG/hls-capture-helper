@@ -15,12 +15,16 @@ temp/
 
 # Node/browser-extension tooling artifacts
 node_modules/
+desktop/dist*/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 web-ext-artifacts/
 *.zip
+
+# Machine-specific desktop configuration
+desktop/nas-config.json
 
 # Python/native-host runtime artifacts
 __pycache__/
