@@ -17,14 +17,14 @@ const MOVIES_PROFILE = {
   searchPlaceholder: "Search movies (e.g. avengers endgame)",
   landingTitle: "What do you want to watch?",
   landingLead:
-    "Search for a movie, play it in the built-in browser, then save it as MP4 to your PC or NAS.",
+    "Search our catalog, open a title, then save it as MP4 to your PC or NAS.",
   openAnimeButton: true,
   hideMovieDownloader: false,
   defaultSidebarMode: "movies",
   tvShowLead:
     "Open a specific season page on Tornado Movies, scan only that season's episodes, then download each episode as its own MP4.",
   startupLog:
-    "App ready. Open a movie and use the site's Download links, or play for HLS capture."
+    "App ready. Search the catalog, open a movie, then download or queue it."
 };
 
 function animeConfigPath() {

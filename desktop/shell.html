@@ -60,16 +60,16 @@
     </section>
 
     <section id="search-panel" class="search-panel">
-      <div class="search-card">
+      <div id="catalog-home" class="search-card catalog-home">
+        <p class="catalog-brand" id="catalog-brand">Movie Stream Downloader</p>
         <h1 id="landing-title">What do you want to watch?</h1>
         <p id="landing-lead" class="search-lead">
-          Search for a movie, play it in the built-in browser, then save it as MP4 to your
-          PC or NAS. Streams are captured automatically while you watch.
+          Search the catalog, open a title, then save it as MP4 to your PC or NAS.
         </p>
         <ul class="search-features" id="search-features">
-          <li>Ad blocking and redirect protection while browsing</li>
-          <li>Best-quality stream detection</li>
-          <li>Downloads saved to your Movies folder with poster art</li>
+          <li>Custom catalog search — no website browsing</li>
+          <li>Direct download when available, with poster art</li>
+          <li>Queue movies for PC or NAS</li>
         </ul>
         <form id="search-form" class="search-form" autocomplete="off">
           <input
@@ -80,8 +80,37 @@
           />
           <button type="submit" class="primary">Search</button>
         </form>
-        <button id="browse-home" type="button" class="secondary browse-home">Browse Tornado Movies</button>
+        <button id="browse-home" type="button" class="secondary browse-home" hidden>Browse Tornado Movies</button>
         <p id="search-error" class="search-error"></p>
+      </div>
+
+      <div id="catalog-results" class="catalog-results" hidden>
+        <div class="catalog-results-head">
+          <div>
+            <button id="catalog-back-home" type="button" class="secondary catalog-back">← Home</button>
+            <h2 id="catalog-results-title">Results</h2>
+            <p id="catalog-results-summary" class="catalog-results-summary"></p>
+          </div>
+          <button id="catalog-queue-all" type="button" class="secondary">Add All to Queue</button>
+        </div>
+        <div id="catalog-grid" class="catalog-grid" role="list"></div>
+      </div>
+
+      <div id="catalog-detail" class="catalog-detail" hidden>
+        <button id="catalog-back-results" type="button" class="secondary catalog-back">← Back to results</button>
+        <div class="catalog-detail-body">
+          <div id="catalog-detail-poster" class="catalog-detail-poster" aria-hidden="true"></div>
+          <div class="catalog-detail-meta">
+            <p id="catalog-detail-year" class="catalog-detail-year"></p>
+            <h2 id="catalog-detail-title">Movie</h2>
+            <p id="catalog-detail-status" class="catalog-detail-status"></p>
+            <div class="catalog-detail-actions">
+              <button id="catalog-download-local" type="button" class="primary">Download → PC</button>
+              <button id="catalog-download-nas" type="button" class="accent">Save to NAS</button>
+              <button id="catalog-add-queue" type="button" class="secondary">Add to Queue</button>
+            </div>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -199,10 +228,10 @@
           </div>
         </div>
         <div class="download-queue-actions">
-          <button id="add-search-to-queue" type="button" class="secondary" title="Add all movies from the current search results page">
+          <button id="add-search-to-queue" type="button" class="secondary" title="Add all movies from the current catalog search">
             Add Search Results
           </button>
-          <button id="add-current-to-queue" type="button" class="secondary" title="Add the open movie page to the queue">
+          <button id="add-current-to-queue" type="button" class="secondary" title="Add the selected catalog movie to the queue">
             Add Current Movie
           </button>
           <button id="start-download-queue-local" type="button" class="primary">Queue → PC</button>

@@ -42,6 +42,23 @@ const searchForm = document.getElementById("search-form");
 const searchInput = document.getElementById("search-input");
 const searchError = document.getElementById("search-error");
 const browseHomeButton = document.getElementById("browse-home");
+const catalogHome = document.getElementById("catalog-home");
+const catalogResults = document.getElementById("catalog-results");
+const catalogDetail = document.getElementById("catalog-detail");
+const catalogGrid = document.getElementById("catalog-grid");
+const catalogResultsTitle = document.getElementById("catalog-results-title");
+const catalogResultsSummary = document.getElementById("catalog-results-summary");
+const catalogBackHome = document.getElementById("catalog-back-home");
+const catalogBackResults = document.getElementById("catalog-back-results");
+const catalogQueueAll = document.getElementById("catalog-queue-all");
+const catalogDetailPoster = document.getElementById("catalog-detail-poster");
+const catalogDetailTitle = document.getElementById("catalog-detail-title");
+const catalogDetailYear = document.getElementById("catalog-detail-year");
+const catalogDetailStatus = document.getElementById("catalog-detail-status");
+const catalogDownloadLocal = document.getElementById("catalog-download-local");
+const catalogDownloadNas = document.getElementById("catalog-download-nas");
+const catalogAddQueue = document.getElementById("catalog-add-queue");
+const catalogBrand = document.getElementById("catalog-brand");
 const toolbarSearchForm = document.getElementById("toolbar-search-form");
 const toolbarSearchInput = document.getElementById("toolbar-search-input");
 const progressDock = document.getElementById("progress-dock");
@@ -96,6 +113,10 @@ let tvShowActive = false;
 let tvShowPlan = null;
 let sidebarMode = "movies";
 let hideMovieDownloader = false;
+let catalogMode = false;
+let catalogMovies = [];
+let selectedCatalogMovie = null;
+let catalogView = "home";
 let siteLabel = "Tornado Movies";
 let pendingNasRetry = null;
 let lastLibraryRefreshAt = 0;
@@ -192,15 +213,186 @@ async function refreshStreamDebug() {
 
 function showSearchPanel() {
   searchPanel.hidden = false;
-  streamStatus.textContent = hideMovieDownloader
-    ? "Search for an anime series on Aniwave."
-    : "Search for a movie to begin.";
+  if (catalogMode) {
+    showCatalogView(catalogView === "detail" || catalogView === "results" ? catalogView : "home");
+    streamStatus.textContent =
+      catalogView === "home" ? "Search the catalog to begin." : streamStatus.textContent;
+  } else {
+    streamStatus.textContent = hideMovieDownloader
+      ? "Search for an anime series on Aniwave."
+      : "Search for a movie to begin.";
+  }
   searchInput.focus();
 }
 
 function hideSearchPanel() {
+  if (catalogMode) return;
   searchPanel.hidden = true;
   searchError.textContent = "";
+}
+
+function showCatalogView(view) {
+  if (!catalogMode) return;
+  catalogView = view;
+  searchPanel.hidden = false;
+  searchPanel.classList.add("catalog-mode");
+  if (catalogHome) catalogHome.hidden = view !== "home";
+  if (catalogResults) catalogResults.hidden = view !== "results";
+  if (catalogDetail) catalogDetail.hidden = view !== "detail";
+  reportChromeLayout();
+}
+
+function renderCatalogPoster(container, movie, className) {
+  container.innerHTML = "";
+  if (movie?.posterUrl) {
+    const img = document.createElement("img");
+    img.src = movie.posterUrl;
+    img.alt = movie.title || "Poster";
+    img.loading = "lazy";
+    img.addEventListener("error", () => {
+      container.innerHTML = "";
+      const fallback = document.createElement("div");
+      fallback.className = className;
+      fallback.textContent = movie.title || "No poster";
+      container.appendChild(fallback);
+    });
+    container.appendChild(img);
+    return;
+  }
+  const fallback = document.createElement("div");
+  fallback.className = className;
+  fallback.textContent = movie?.title || "No poster";
+  container.appendChild(fallback);
+}
+
+function renderCatalogGrid(movies, query) {
+  catalogMovies = Array.isArray(movies) ? movies : [];
+  if (!catalogGrid) return;
+  catalogGrid.innerHTML = "";
+
+  if (catalogResultsTitle) {
+    catalogResultsTitle.textContent = query ? `Results for “${query}”` : "Results";
+  }
+  if (catalogResultsSummary) {
+    const count = catalogMovies.length;
+    catalogResultsSummary.textContent = `${count} title${count === 1 ? "" : "s"}`;
+  }
+
+  for (const movie of catalogMovies) {
+    const card = document.createElement("button");
+    card.type = "button";
+    card.className = "catalog-card";
+    card.setAttribute("role", "listitem");
+
+    const poster = document.createElement("div");
+    poster.className = "catalog-card-poster";
+    renderCatalogPoster(poster, movie, "catalog-card-poster-fallback");
+
+    const title = document.createElement("div");
+    title.className = "catalog-card-title";
+    title.textContent = movie.title || "Movie";
+
+    card.append(poster, title);
+    if (movie.year) {
+      const year = document.createElement("div");
+      year.className = "catalog-card-year";
+      year.textContent = movie.year;
+      card.appendChild(year);
+    }
+
+    card.addEventListener("click", () => openCatalogMovie(movie));
+    catalogGrid.appendChild(card);
+  }
+
+  showCatalogView("results");
+}
+
+function renderCatalogDetail(movie) {
+  selectedCatalogMovie = movie;
+  if (catalogDetailTitle) catalogDetailTitle.textContent = movie.title || "Movie";
+  if (catalogDetailYear) catalogDetailYear.textContent = movie.year || "";
+  if (catalogDetailStatus) {
+    catalogDetailStatus.textContent = "Ready to download or add to queue.";
+  }
+  if (catalogDetailPoster) {
+    renderCatalogPoster(catalogDetailPoster, movie, "catalog-detail-poster-fallback");
+  }
+  showCatalogView("detail");
+}
+
+async function openCatalogMovie(movie) {
+  if (!movie?.movieUrl) return;
+  selectedCatalogMovie = movie;
+  renderCatalogDetail(movie);
+  streamStatus.textContent = `Opening “${movie.title || "movie"}”...`;
+  if (catalogDetailStatus) catalogDetailStatus.textContent = "Loading movie details...";
+
+  const result = await window.streamApp.catalogOpenMovie(movie);
+  if (result.movie) {
+    selectedCatalogMovie = { ...movie, ...result.movie };
+    renderCatalogDetail(selectedCatalogMovie);
+  }
+  if (!result.ok) {
+    streamStatus.textContent = result.error || "Could not open movie details.";
+    if (catalogDetailStatus) {
+      catalogDetailStatus.textContent = result.error || "Showing search result details.";
+    }
+    appendActivityLog("error", result.error || "Could not open movie details.");
+    return;
+  }
+
+  streamStatus.textContent = `Selected “${selectedCatalogMovie.title}”`;
+  if (catalogDetailStatus) catalogDetailStatus.textContent = "Ready to download or add to queue.";
+}
+
+async function downloadSelectedCatalogMovie(destination) {
+  if (!selectedCatalogMovie?.movieUrl) {
+    appendActivityLog("error", "Select a movie from the catalog first.");
+    return;
+  }
+
+  const label = destination === "nas" ? "NAS" : "PC";
+  streamStatus.textContent = `Starting download to ${label}...`;
+  if (catalogDetailStatus) catalogDetailStatus.textContent = `Preparing download to ${label}...`;
+  appendActivityLog("info", `Downloading “${selectedCatalogMovie.title}” → ${label}`);
+
+  const result = await window.streamApp.downloadMovie({
+    movieUrl: selectedCatalogMovie.movieUrl,
+    title: selectedCatalogMovie.title,
+    destination
+  });
+
+  if (!result.ok) {
+    appendActivityLog("error", result.error || "Download failed.");
+    streamStatus.textContent = result.error || "Download failed.";
+    if (catalogDetailStatus) catalogDetailStatus.textContent = result.error || "Download failed.";
+    return;
+  }
+
+  appendActivityLog("success", `Download started for “${selectedCatalogMovie.title}”`);
+  if (catalogDetailStatus) catalogDetailStatus.textContent = `Download started → ${label}`;
+}
+
+async function addSelectedCatalogMovieToQueue(destination = "local") {
+  if (!selectedCatalogMovie?.movieUrl) {
+    appendActivityLog("error", "Select a movie from the catalog first.");
+    return { ok: false };
+  }
+
+  const result = await window.streamApp.addMovieToQueue({
+    movieUrl: selectedCatalogMovie.movieUrl,
+    title: selectedCatalogMovie.title,
+    destination
+  });
+
+  if (!result.ok) {
+    appendActivityLog("error", result.error || "Could not add to queue.");
+    return result;
+  }
+
+  appendActivityLog("success", `Added “${result.item.title}” to queue`);
+  if (catalogDetailStatus) catalogDetailStatus.textContent = "Added to download queue.";
+  return result;
 }
 
 async function runSearch(query, sourceInput = null) {
@@ -209,24 +401,42 @@ async function runSearch(query, sourceInput = null) {
     searchError.textContent = hideMovieDownloader
       ? "Enter an anime title to search."
       : "Enter a movie title to search.";
+    if (catalogMode) showCatalogView("home");
     return;
   }
 
   searchError.textContent = "";
   streamStatus.textContent = `Searching for "${trimmed}"...`;
+  if (catalogMode && catalogResultsSummary) {
+    catalogResultsSummary.textContent = "Searching...";
+    showCatalogView("results");
+    if (catalogGrid) catalogGrid.innerHTML = "";
+  }
 
   const result = await window.streamApp.searchMovies(trimmed);
   if (!result.ok) {
     searchError.textContent = result.error;
     streamStatus.textContent = result.error;
+    if (catalogMode) {
+      showCatalogView("home");
+      appendActivityLog("error", result.error || "Search failed.");
+    }
+    return;
+  }
+
+  searchInput.value = trimmed;
+  toolbarSearchInput.value = trimmed;
+  if (sourceInput) sourceInput.blur();
+
+  if (catalogMode) {
+    renderCatalogGrid(result.movies || [], trimmed);
+    streamStatus.textContent = `Found ${result.movies?.length || 0} result${(result.movies?.length || 0) === 1 ? "" : "s"} for "${trimmed}"`;
+    appendActivityLog("success", `Catalog search: ${result.movies?.length || 0} titles for “${trimmed}”`);
     return;
   }
 
   hideSearchPanel();
-  searchInput.value = trimmed;
-  toolbarSearchInput.value = trimmed;
   streamStatus.textContent = `Showing results for "${trimmed}"`;
-  if (sourceInput) sourceInput.blur();
 }
 
 function showBlockedPanel(details = {}) {
@@ -1118,9 +1328,18 @@ function setMovieToolbarVisible(visible) {
 
 function applyProfileLayout(env) {
   hideMovieDownloader = Boolean(env.hideMovieDownloader);
+  catalogMode = Boolean(env.catalogMode) && !hideMovieDownloader;
   siteLabel = env.siteLabel || "Tornado Movies";
-  if (browseHomeButton) browseHomeButton.textContent = `Browse ${siteLabel}`;
+  if (browseHomeButton) {
+    browseHomeButton.textContent = `Browse ${siteLabel}`;
+    browseHomeButton.hidden = catalogMode;
+  }
   if (connectSiteButton) connectSiteButton.hidden = hideMovieDownloader;
+  if (catalogBrand && env.profileLabel) catalogBrand.textContent = env.profileLabel;
+
+  for (const button of [backButton, forwardButton, reloadSiteButton]) {
+    if (button) button.hidden = catalogMode;
+  }
 
   if (hideMovieDownloader) {
     if (modeTabs) modeTabs.hidden = true;
@@ -1130,6 +1349,10 @@ function applyProfileLayout(env) {
     if (tvShowLead && env.tvShowLead) tvShowLead.textContent = env.tvShowLead;
     if (tvShowTitle) tvShowTitle.textContent = "Anime Downloader";
     if (tvShowBadge) tvShowBadge.hidden = true;
+    if (catalogResults) catalogResults.hidden = true;
+    if (catalogDetail) catalogDetail.hidden = true;
+    if (catalogHome) catalogHome.hidden = false;
+    searchPanel.classList.remove("catalog-mode");
     setMovieToolbarVisible(false);
     if (streamStatus) {
       streamStatus.textContent = "Search Aniwave or open a series page to get started.";
@@ -1145,6 +1368,10 @@ function applyProfileLayout(env) {
   if (tvShowTitle) tvShowTitle.textContent = "TV Show Mode";
   if (tvShowBadge) tvShowBadge.hidden = false;
   setMovieToolbarVisible(true);
+  if (catalogMode) {
+    searchPanel.classList.add("catalog-mode");
+    showCatalogView("home");
+  }
   setSidebarMode(env.defaultSidebarMode === "tv" ? "tv" : "movies");
 }
 
@@ -1184,6 +1411,11 @@ async function initEnvironment() {
 }
 
 downloadButton.addEventListener("click", async () => {
+  if (catalogMode && selectedCatalogMovie?.movieUrl) {
+    await downloadSelectedCatalogMovie("local");
+    return;
+  }
+
   downloadButton.disabled = true;
   saveNasButton.disabled = true;
   streamStatus.textContent = "Starting download...";
@@ -1214,6 +1446,11 @@ downloadButton.addEventListener("click", async () => {
 });
 
 saveNasButton.addEventListener("click", async () => {
+  if (catalogMode && selectedCatalogMovie?.movieUrl) {
+    await downloadSelectedCatalogMovie("nas");
+    return;
+  }
+
   downloadButton.disabled = true;
   saveNasButton.disabled = true;
   streamStatus.textContent = "Saving stream to NAS...";
@@ -1221,20 +1458,27 @@ saveNasButton.addEventListener("click", async () => {
   progressDock.hidden = false;
   updateProgressDock({
     state: "running",
-    phase: "Preparing NAS save...",
+    phase: "Preparing NAS download...",
     percent: 3,
     destination: "nas"
   });
 
   const result = await window.streamApp.saveToNas();
   if (!result.ok) {
+    if (result.needsCredentials) {
+      pendingNasRetry = "save";
+      openNasConnectPanel(result.error);
+      hideProgressDock();
+      return;
+    }
     streamStatus.textContent = result.error;
     downloadButton.disabled = false;
     saveNasButton.disabled = false;
+    hideProgressDock();
     return;
   }
 
-  streamStatus.textContent = `Saving ${result.playlist.kind} stream (${result.quality?.label || "best available"})${result.artworkPath ? " + poster" : ""} to NAS...`;
+  streamStatus.textContent = `Saving to NAS (${result.quality?.label || "best available"})${result.artworkPath ? " + poster" : ""}...`;
   stopButton.hidden = false;
   await refreshDownloadStatus();
 });
@@ -1422,6 +1666,11 @@ retryLoadButton.addEventListener("click", async () => {
 });
 
 browseHomeButton.addEventListener("click", async () => {
+  if (catalogMode) {
+    showCatalogView("home");
+    streamStatus.textContent = "Search the catalog to begin.";
+    return;
+  }
   searchError.textContent = "";
   const result = await window.streamApp.goHome();
   if (!result.ok) {
@@ -1441,7 +1690,7 @@ window.streamApp.onPageLoadFailed((details) => {
 });
 
 window.streamApp.onGatewayRetry((details) => {
-  hideSearchPanel();
+  if (!catalogMode) hideSearchPanel();
   streamStatus.textContent = `Site returned 502 — retrying (${details.attempt}/${details.maxAttempts})...`;
 });
 
@@ -1453,6 +1702,10 @@ window.streamApp.onPageGatewayFailed((details) => {
 });
 
 window.streamApp.onPageLoadSucceeded(() => {
+  if (catalogMode) {
+    hideBlockedPanel();
+    return;
+  }
   hideSearchPanel();
   hideBlockedPanel();
   refreshDetection();
@@ -1460,6 +1713,10 @@ window.streamApp.onPageLoadSucceeded(() => {
 });
 
 window.streamApp.onBrowserContentVisible(() => {
+  if (catalogMode) {
+    hideBlockedPanel();
+    return;
+  }
   hideSearchPanel();
   hideBlockedPanel();
 });
@@ -1474,6 +1731,11 @@ window.streamApp.onRedirectBlocked((details) => {
 
 window.streamApp.onShowSearchLanding(() => {
   hideBlockedPanel();
+  if (catalogMode) {
+    catalogMovies = [];
+    selectedCatalogMovie = null;
+    showCatalogView("home");
+  }
   showSearchPanel();
 });
 
@@ -1499,7 +1761,13 @@ window.streamApp.onQueueDebug((entry) => {
 });
 
 addSearchToQueueButton.addEventListener("click", async () => {
-  const result = await window.streamApp.addSearchResultsToQueue("local");
+  const movies = catalogMode ? catalogMovies : null;
+  if (catalogMode && !movies?.length) {
+    appendActivityLog("error", "Search the catalog first, then add results to the queue.");
+    return;
+  }
+
+  const result = await window.streamApp.addSearchResultsToQueue("local", movies);
   if (!result.ok) {
     appendActivityLog("error", result.error);
     return;
@@ -1516,6 +1784,11 @@ addSearchToQueueButton.addEventListener("click", async () => {
 });
 
 addCurrentToQueueButton.addEventListener("click", async () => {
+  if (catalogMode) {
+    await addSelectedCatalogMovieToQueue("local");
+    return;
+  }
+
   const result = await window.streamApp.addCurrentToQueue("local");
   if (!result.ok) {
     appendActivityLog("error", result.error);
@@ -1523,6 +1796,46 @@ addCurrentToQueueButton.addEventListener("click", async () => {
   }
   appendActivityLog("success", `Added "${result.item.title}" to queue`);
 });
+
+if (catalogBackHome) {
+  catalogBackHome.addEventListener("click", () => {
+    showCatalogView("home");
+    streamStatus.textContent = "Search the catalog to begin.";
+  });
+}
+
+if (catalogBackResults) {
+  catalogBackResults.addEventListener("click", () => {
+    if (catalogMovies.length) showCatalogView("results");
+    else showCatalogView("home");
+  });
+}
+
+if (catalogQueueAll) {
+  catalogQueueAll.addEventListener("click", async () => {
+    if (!catalogMovies.length) {
+      appendActivityLog("error", "No search results to queue.");
+      return;
+    }
+    const result = await window.streamApp.addSearchResultsToQueue("local", catalogMovies);
+    if (!result.ok) {
+      appendActivityLog("error", result.error);
+      return;
+    }
+    const added = result.added?.length || 0;
+    appendActivityLog("success", `Added ${added} movie${added === 1 ? "" : "s"} to queue`);
+  });
+}
+
+if (catalogDownloadLocal) {
+  catalogDownloadLocal.addEventListener("click", () => downloadSelectedCatalogMovie("local"));
+}
+if (catalogDownloadNas) {
+  catalogDownloadNas.addEventListener("click", () => downloadSelectedCatalogMovie("nas"));
+}
+if (catalogAddQueue) {
+  catalogAddQueue.addEventListener("click", () => addSelectedCatalogMovieToQueue("local"));
+}
 
 async function startQueueDownload(destination) {
   const result = await window.streamApp.startDownloadQueue(destination);
@@ -1588,6 +1901,28 @@ function setSidebarMode(mode) {
   modeTabTv.setAttribute("aria-selected", String(isTv));
   downloadQueueSection.hidden = isTv;
   tvShowSection.hidden = !isTv;
+
+  if (!catalogMode) return;
+
+  if (isTv) {
+    window.streamApp.setCatalogBrowserLocked(false).then(async () => {
+      for (const button of [backButton, forwardButton, reloadSiteButton]) {
+        if (button) button.hidden = false;
+      }
+      searchPanel.hidden = true;
+      streamStatus.textContent = "TV mode: open a season page on the site, then scan it.";
+      await window.streamApp.goHome();
+      await refreshNavigationButtons();
+    });
+  } else {
+    window.streamApp.setCatalogBrowserLocked(true).then(() => {
+      for (const button of [backButton, forwardButton, reloadSiteButton]) {
+        if (button) button.hidden = true;
+      }
+      showCatalogView(catalogView === "detail" || catalogView === "results" ? catalogView : "home");
+      streamStatus.textContent = "Search the catalog to begin.";
+    });
+  }
 }
 
 function renderTvShowPlan(plan = tvShowPlan, payload = {}) {

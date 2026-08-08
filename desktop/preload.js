@@ -13,7 +13,11 @@ contextBridge.exposeInMainWorld("streamApp", {
   getSiteCredentials: () => ipcRenderer.invoke("get-site-credentials"),
   saveSiteCredentials: (payload) => ipcRenderer.invoke("save-site-credentials", payload),
   siteLogin: () => ipcRenderer.invoke("site-login"),
+  setCatalogBrowserLocked: (locked = true) => ipcRenderer.invoke("set-catalog-browser-locked", locked),
   searchMovies: (query) => ipcRenderer.invoke("search-movies", query),
+  catalogOpenMovie: (payload) => ipcRenderer.invoke("catalog-open-movie", payload),
+  downloadMovie: (payload) => ipcRenderer.invoke("download-movie", payload),
+  addMovieToQueue: (payload) => ipcRenderer.invoke("add-movie-to-queue", payload),
   reloadCurrentPage: () => ipcRenderer.invoke("reload-current-page"),
   getNavigationState: () => ipcRenderer.invoke("get-navigation-state"),
   goBack: () => ipcRenderer.invoke("go-back"),
@@ -24,8 +28,8 @@ contextBridge.exposeInMainWorld("streamApp", {
   getDownloadQueue: () => ipcRenderer.invoke("get-download-queue"),
   getQueueDebug: () => ipcRenderer.invoke("get-queue-debug"),
   addCurrentToQueue: (destination = "local") => ipcRenderer.invoke("add-current-to-queue", destination),
-  addSearchResultsToQueue: (destination = "local") =>
-    ipcRenderer.invoke("add-search-results-to-queue", destination),
+  addSearchResultsToQueue: (destination = "local", movies = null) =>
+    ipcRenderer.invoke("add-search-results-to-queue", destination, movies),
   removeFromQueue: (id) => ipcRenderer.invoke("remove-from-queue", id),
   clearDownloadQueue: () => ipcRenderer.invoke("clear-download-queue"),
   startDownloadQueue: (destination = "local") => ipcRenderer.invoke("start-download-queue", destination),

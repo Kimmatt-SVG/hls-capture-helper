@@ -1,8 +1,8 @@
-# HLS Capture Helper
+# Movie Stream Downloader
 
-HLS Capture Helper is a toolkit for archiving authorized HTTP Live Streaming (HLS) media. The repository contains a browser extension, an optional native-messaging helper, and a full Windows desktop application.
+Movie Stream Downloader is a Windows desktop application for organizing and saving authorized movie, television, and anime streams. It combines an embedded browser with movie queues, season and episode scanning, a dedicated anime mode, and local or NAS library output.
 
-The desktop application provides an embedded browser, movie and episode download workflows, a separate anime mode, FFmpeg-based HLS capture, direct-file downloads, queues, progress reporting, and local or NAS storage.
+The project uses FFmpeg for validated HLS capture and supports direct-file downloads when available. This repository also includes the original HLS Capture Helper browser extension and its optional native-messaging helper.
 
 > Use this project only for streams you own or have explicit permission to archive. It does not bypass DRM, defeat access controls, or remove copy protection. DRM-protected streams are not supported.
 

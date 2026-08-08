@@ -44,6 +44,7 @@ const { processDownloadQueue } = require("./lib/queue-runner");
 const { createQueueDebugger, recentQueueDebugEntries } = require("./lib/queue-debug");
 const {
   scrapeSearchMovieLinks,
+  scrapeMovieDetail,
   buildTornadoSearchScraperScript
 } = require("./lib/tornado-search-scraper");
 const { setupTvShowScraper, scrapeTvShowFromPage } = require("./lib/tv-show-scraper");
@@ -57,6 +58,7 @@ const {
 } = require("./lib/tv-url-utils");
 
 const appProfile = getSiteProfile();
+let catalogBrowserLocked = !Boolean(appProfile.hideMovieDownloader);
 
 const WARP_DOWNLOAD_URL = "https://one.one.one.one/";
 const WARP_WINGET_COMMAND =
@@ -889,14 +891,26 @@ function setupHlsListener(session) {
   });
 }
 
+function isCatalogMode() {
+  return !Boolean(appProfile.hideMovieDownloader);
+}
+
 function showBrowserView() {
   if (!mainWindow || !browserView) return;
+  if (isCatalogMode() && catalogBrowserLocked) {
+    hideBrowserView();
+    return;
+  }
   mainWindow.setBrowserView(browserView);
   layoutBrowserView();
   mainWindow.webContents.send("page-load-succeeded");
 }
 
 function ensureBrowserVisible() {
+  if (isCatalogMode() && catalogBrowserLocked) {
+    hideBrowserView();
+    return;
+  }
   showBrowserView();
   mainWindow?.webContents.send("browser-content-visible");
 }
@@ -917,6 +931,52 @@ function showSearchLanding() {
   mainWindow.webContents.send("show-search-landing");
 }
 
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function loadUrlAndWait(contents, url, options = {}) {
+  const timeoutMs = Number(options.timeoutMs) || 45_000;
+  const settleMs = Number(options.settleMs) || 1200;
+
+  return new Promise((resolve, reject) => {
+    if (!contents || contents.isDestroyed()) {
+      reject(new Error("Browser is not ready."));
+      return;
+    }
+
+    let settled = false;
+    const cleanup = () => {
+      clearTimeout(timer);
+      contents.removeListener("did-finish-load", onFinishLoad);
+      contents.removeListener("did-fail-load", onFailLoad);
+    };
+
+    const finish = (error) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      if (error) reject(error);
+      else resolve();
+    };
+
+    const onFinishLoad = () => {
+      setTimeout(() => finish(), settleMs);
+    };
+
+    const onFailLoad = (_event, errorCode, errorDescription, _validatedURL, isMainFrame) => {
+      if (!isMainFrame || errorCode === ERR_ABORTED) return;
+      finish(new Error(errorDescription || `Page failed to load (${errorCode})`));
+    };
+
+    const timer = setTimeout(() => finish(new Error("Page load timed out.")), timeoutMs);
+
+    contents.on("did-finish-load", onFinishLoad);
+    contents.on("did-fail-load", onFailLoad);
+    contents.loadURL(url).catch((error) => finish(error));
+  });
+}
+
 function loadSearch(query) {
   if (!browserView) return;
   resetStreamCapture();
@@ -924,6 +984,71 @@ function loadSearch(query) {
   ensureBrowserVisible();
   browserView.webContents.loadURL(url);
   return url;
+}
+
+async function catalogSearch(query) {
+  const trimmed = String(query || "").trim();
+  if (!trimmed) {
+    return { ok: false, error: "Enter a movie title to search.", movies: [] };
+  }
+  if (!browserView?.webContents || browserView.webContents.isDestroyed()) {
+    return { ok: false, error: "Browser is not ready.", movies: [] };
+  }
+
+  const url = buildSearchUrl(trimmed);
+  resetStreamCapture();
+  hideBrowserView();
+
+  try {
+    await loadUrlAndWait(browserView.webContents, url, { settleMs: 1600 });
+    await delay(400);
+    const scrape = await scrapeSearchMovieLinks(browserView.webContents);
+    if (!scrape.ok) {
+      return { ok: false, error: scrape.error || "Search scrape failed.", query: trimmed, url, movies: [] };
+    }
+    if (!scrape.movies?.length) {
+      return {
+        ok: false,
+        error: `No movies found for "${trimmed}".`,
+        query: trimmed,
+        url,
+        movies: []
+      };
+    }
+    return { ok: true, query: trimmed, url, movies: scrape.movies };
+  } catch (error) {
+    return { ok: false, error: error.message || String(error), query: trimmed, url, movies: [] };
+  }
+}
+
+async function catalogOpenMovie(movieUrl, fallback = {}) {
+  const targetUrl = canonicalMoviePageUrl(movieUrl) || normalizeMovieUrl(movieUrl) || String(movieUrl || "");
+  if (!/\/movie\//i.test(targetUrl)) {
+    return { ok: false, error: "Invalid movie URL." };
+  }
+
+  try {
+    await loadMoviePageForQueue(targetUrl);
+    const scrape = await scrapeMovieDetail(browserView.webContents);
+    const movie = {
+      movieUrl: targetUrl,
+      title: scrape.movie?.title || fallback.title || titleFromMovieUrl(targetUrl),
+      posterUrl: scrape.movie?.posterUrl || fallback.posterUrl || undefined,
+      year: scrape.movie?.year || fallback.year || undefined
+    };
+    return { ok: true, movie };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error.message || String(error),
+      movie: {
+        movieUrl: targetUrl,
+        title: fallback.title || titleFromMovieUrl(targetUrl),
+        posterUrl: fallback.posterUrl,
+        year: fallback.year
+      }
+    };
+  }
 }
 
 function sendNavigationState() {
@@ -1024,8 +1149,10 @@ async function createWindow() {
     }
   });
 
-  mainWindow.setBrowserView(browserView);
-  layoutBrowserView();
+  if (!isCatalogMode()) {
+    mainWindow.setBrowserView(browserView);
+    layoutBrowserView();
+  }
   mainWindow.on("resize", layoutBrowserView);
 
   const browserSession = browserView.webContents.session;
@@ -1180,13 +1307,14 @@ ipcMain.handle("get-environment", () => {
     currentPageUrl: browserView?.webContents?.getURL() || null,
     openAnimeButton: Boolean(appProfile.openAnimeButton),
     hideMovieDownloader: Boolean(appProfile.hideMovieDownloader),
+    catalogMode: isCatalogMode(),
+    landingTitle: appProfile.landingTitle || null,
+    landingLead: appProfile.landingLead || null,
     defaultSidebarMode: appProfile.defaultSidebarMode || "movies",
     siteLabel: appProfile.siteLabel || "Tornado Movies",
     tvShowLead: appProfile.tvShowLead || "",
     startupLog: appProfile.startupLog || "",
-    searchPlaceholder: appProfile.searchPlaceholder,
-    landingTitle: appProfile.landingTitle,
-    landingLead: appProfile.landingLead
+    searchPlaceholder: appProfile.searchPlaceholder
   };
 });
 
@@ -1217,8 +1345,24 @@ ipcMain.handle("reload-page", () => {
   return { ok: true };
 });
 
+ipcMain.handle("set-catalog-browser-locked", (_event, locked = true) => {
+  catalogBrowserLocked = Boolean(locked);
+  if (!isCatalogMode()) {
+    return { ok: true, locked: false };
+  }
+  if (catalogBrowserLocked) {
+    hideBrowserView();
+    mainWindow?.webContents.send("show-search-landing");
+  }
+  return { ok: true, locked: catalogBrowserLocked };
+});
+
 ipcMain.handle("go-home", () => {
   if (!browserView) return { ok: false, error: "Browser is not ready." };
+  if (isCatalogMode() && catalogBrowserLocked) {
+    showSearchLanding();
+    return { ok: true, catalog: true };
+  }
   resetStreamCapture();
   ensureBrowserVisible();
   browserView.webContents.loadURL(SITE_HOME_URL);
@@ -1273,15 +1417,69 @@ ipcMain.handle("site-login", async () => {
   return siteAutoLogin.requestManualLogin();
 });
 
-ipcMain.handle("search-movies", (_event, query) => {
-  if (!browserView) return { ok: false, error: "Browser is not ready." };
+ipcMain.handle("search-movies", async (_event, query) => {
+  if (!browserView) return { ok: false, error: "Browser is not ready.", movies: [] };
+
+  if (isCatalogMode()) {
+    return catalogSearch(query);
+  }
 
   try {
     const url = loadSearch(query);
-    return { ok: true, url, query: String(query || "").trim() };
+    return { ok: true, url, query: String(query || "").trim(), movies: [] };
   } catch (error) {
+    return { ok: false, error: error.message || String(error), movies: [] };
+  }
+});
+
+ipcMain.handle("catalog-open-movie", async (_event, payload = {}) => {
+  if (!isCatalogMode()) {
+    return { ok: false, error: "Catalog mode is only available in the movie app." };
+  }
+  return catalogOpenMovie(payload.movieUrl, {
+    title: payload.title,
+    posterUrl: payload.posterUrl,
+    year: payload.year
+  });
+});
+
+ipcMain.handle("download-movie", async (_event, payload = {}) => {
+  if (!browserView) return { ok: false, error: "Browser is not ready." };
+  const movieUrl = canonicalMoviePageUrl(payload.movieUrl) || String(payload.movieUrl || "");
+  if (!/\/movie\//i.test(movieUrl)) {
+    return { ok: false, error: "Pick a movie from the catalog first." };
+  }
+
+  const destination = payload.destination === "nas" ? "nas" : "local";
+  try {
+    await loadMoviePageForQueue(movieUrl);
+    return await startStreamDownload(destination, { freshLink: true });
+  } catch (error) {
+    ffmpegRunner.clearJob();
     return { ok: false, error: error.message || String(error) };
   }
+});
+
+ipcMain.handle("add-movie-to-queue", (_event, payload = {}) => {
+  const movieUrl = canonicalMoviePageUrl(payload.movieUrl) || String(payload.movieUrl || "");
+  if (!/\/movie\//i.test(movieUrl)) {
+    return { ok: false, error: "Invalid movie URL." };
+  }
+
+  const destination = payload.destination === "nas" ? "nas" : "local";
+  const result = downloadQueue.add(movieUrl, {
+    destination,
+    title: payload.title || titleFromMovieUrl(movieUrl)
+  });
+  if (result.ok) {
+    queueDebug("queue-add", `Added "${result.item.title}"`, {
+      movieUrl: result.item.movieUrl,
+      movieId: extractMovieIdFromUrl(result.item.movieUrl),
+      destination
+    });
+    notifyQueueUpdate();
+  }
+  return result;
 });
 
 ipcMain.handle("reload-current-page", () => {
@@ -1796,18 +1994,22 @@ ipcMain.handle("add-current-to-queue", (_event, destination = "local") => {
   return result;
 });
 
-ipcMain.handle("add-search-results-to-queue", async (_event, destination = "local") => {
-  const scrape = await scrapeSearchMovieLinks(browserView?.webContents);
-  if (!scrape.ok || !scrape.movies?.length) {
-    return {
-      ok: false,
-      error: scrape.error || "No movies found on this page. Search for movies first."
-    };
+ipcMain.handle("add-search-results-to-queue", async (_event, destination = "local", movies = null) => {
+  let list = Array.isArray(movies) ? movies : null;
+  if (!list?.length) {
+    const scrape = await scrapeSearchMovieLinks(browserView?.webContents);
+    if (!scrape.ok || !scrape.movies?.length) {
+      return {
+        ok: false,
+        error: scrape.error || "No movies found. Search the catalog first."
+      };
+    }
+    list = scrape.movies;
   }
 
-  const result = downloadQueue.addMany(scrape.movies, destination);
+  const result = downloadQueue.addMany(list, destination);
   queueDebug("queue-add-many", `Added ${result.added?.length || 0} movies from search`, {
-    found: scrape.movies.length,
+    found: list.length,
     added: result.added?.map((item) => ({
       title: item.title,
       movieUrl: item.movieUrl,
@@ -1816,7 +2018,7 @@ ipcMain.handle("add-search-results-to-queue", async (_event, destination = "loca
     skipped: result.skipped
   });
   notifyQueueUpdate();
-  return { ok: true, ...result, found: scrape.movies.length };
+  return { ok: true, ...result, found: list.length };
 });
 
 ipcMain.handle("remove-from-queue", (_event, id) => {
