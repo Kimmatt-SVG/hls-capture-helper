@@ -312,7 +312,9 @@ function renderCatalogGrid(movies, query) {
   }
 
   showCatalogView("results");
-  window.shellMotion?.animateCatalogGrid(catalogGrid.querySelectorAll(".catalog-card"));
+  const cards = catalogGrid.querySelectorAll(".catalog-card");
+  window.shellMotion?.animateCatalogGrid(cards);
+  window.shellMotion?.bindPosterInteractions?.(cards);
 }
 
 function renderCatalogDetail(movie) {
@@ -655,7 +657,9 @@ async function refreshLibrary(force = false) {
   librarySummary.textContent = `${library.totalCount} movie${library.totalCount === 1 ? "" : "s"} · NAS: ${formatLibraryPath(env.nasVideoFolder)}`;
 
   if (catalogMode && catalogView === "home") {
-    window.shellMotion?.animateCatalogGrid?.(librarySections.querySelectorAll(".library-item"));
+    const items = librarySections.querySelectorAll(".library-item");
+    window.shellMotion?.animateCatalogGrid?.(items);
+    window.shellMotion?.bindPosterInteractions?.(items);
   }
 }
 

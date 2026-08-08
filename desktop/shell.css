@@ -329,11 +329,13 @@ body {
   gap: 8px;
   padding: 0;
   margin: 0;
+  cursor: pointer;
+  transform-origin: center bottom;
+  will-change: transform;
 }
 
 .home-library .library-item:hover {
   background: transparent;
-  transform: translateY(-3px);
 }
 
 .home-library .library-banner,
@@ -341,6 +343,8 @@ body {
   width: 112px;
   height: 168px;
   border-radius: var(--radius-md);
+  transform-origin: center center;
+  will-change: transform;
 }
 
 .home-library .library-banner-fallback {
@@ -437,12 +441,12 @@ body {
   text-align: left;
   cursor: pointer;
   font: inherit;
-  transition: transform 0.2s ease;
+  transform-origin: center bottom;
+  will-change: transform;
 }
 
 .catalog-card:hover,
 .catalog-card:focus-visible {
-  transform: translateY(-4px);
   outline: none;
 }
 
@@ -456,6 +460,8 @@ body {
     rgba(0, 0, 0, 0.35);
   border: 1px solid var(--glass-border-subtle);
   box-shadow: 0 12px 28px rgba(0, 0, 0, 0.28);
+  transform-origin: center center;
+  will-change: transform;
 }
 
 .catalog-card-poster img {

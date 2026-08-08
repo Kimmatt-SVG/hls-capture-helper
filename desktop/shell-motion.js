@@ -177,12 +177,89 @@
     });
   }
 
+  const boundPosters = new WeakSet();
+
+  function mediaTarget(node) {
+    return (
+      node.querySelector(".catalog-card-poster, .library-banner, .library-banner-fallback") || node
+    );
+  }
+
+  function animatePosterHover(node, entering) {
+    if (!ready() || !node) return;
+    const level = motionLevel();
+    const media = mediaTarget(node);
+    const full = level === "full";
+    api.animate(node, {
+      y: entering ? (full ? -8 : -3) : 0,
+      scale: entering ? (full ? 1.04 : 1.015) : 1,
+      duration: entering ? (full ? 220 : 120) : full ? 200 : 110,
+      ease: entering ? "outQuad" : "outCubic"
+    });
+    if (media && media !== node) {
+      api.animate(media, {
+        scale: entering ? (full ? 1.05 : 1.02) : 1,
+        duration: entering ? (full ? 240 : 120) : full ? 200 : 110,
+        ease: entering ? "outQuad" : "outCubic"
+      });
+    }
+  }
+
+  function animatePosterPress(node, pressed) {
+    if (!ready() || !node) return;
+    const level = motionLevel();
+    const full = level === "full";
+    api.animate(node, {
+      scale: pressed ? (full ? 0.96 : 0.985) : full ? 1.04 : 1.015,
+      y: pressed ? (full ? -2 : -1) : full ? -8 : -3,
+      duration: pressed ? 90 : 160,
+      ease: pressed ? "inQuad" : "outBack"
+    });
+  }
+
+  function animatePosterClick(node) {
+    if (!ready() || !node) return;
+    const level = motionLevel();
+    const full = level === "full";
+    api.animate(node, {
+      scale: [full ? 0.95 : 0.98, full ? 1.06 : 1.02, 1],
+      y: [full ? -2 : -1, full ? -10 : -4, 0],
+      duration: full ? 420 : 200,
+      ease: "outBack"
+    });
+  }
+
+  function bindPosterInteractions(targets) {
+    const list = nodesFrom(targets);
+    for (const node of list) {
+      if (!node || boundPosters.has(node)) continue;
+      boundPosters.add(node);
+      node.classList.add("motion-poster");
+
+      node.addEventListener("pointerenter", () => animatePosterHover(node, true));
+      node.addEventListener("pointerleave", () => {
+        animatePosterHover(node, false);
+        clearInline(mediaTarget(node));
+      });
+      node.addEventListener("pointerdown", (event) => {
+        if (event.button !== 0) return;
+        animatePosterPress(node, true);
+      });
+      node.addEventListener("pointerup", () => animatePosterPress(node, false));
+      node.addEventListener("pointercancel", () => animatePosterHover(node, false));
+      node.addEventListener("click", () => animatePosterClick(node));
+    }
+  }
+
   window.shellMotion = {
     ready,
     motionLevel,
     animateCatalogHome,
     animateCatalogGrid,
     animateCatalogDetail,
-    pulseQueueChrome
+    pulseQueueChrome,
+    bindPosterInteractions,
+    animatePosterHover,
+    animatePosterClick
   };
 })();
