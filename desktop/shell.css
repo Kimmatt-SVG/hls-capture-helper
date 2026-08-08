@@ -223,17 +223,39 @@ body {
   margin: 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 28px;
+  gap: 18px;
+  min-height: calc(100vh - 140px);
   padding-bottom: 24px;
 }
 
 .catalog-home-hero {
-  margin: 0 auto;
-  width: min(640px, 100%);
+  margin: 0;
+  width: 100%;
+  padding: 20px 22px;
+}
+
+.catalog-home-hero .catalog-brand {
+  margin-bottom: 6px !important;
+}
+
+.catalog-home-hero h1 {
+  margin: 0 0 6px;
+  font-size: clamp(24px, 3vw, 32px);
+}
+
+.catalog-home-hero .search-lead {
+  margin-bottom: 14px !important;
+  max-width: 42rem;
+}
+
+.catalog-home-search {
+  margin: 0;
 }
 
 .home-library {
   width: 100%;
+  flex: 1 1 auto;
+  min-height: 320px;
   padding: 18px 20px 20px;
   border-radius: var(--radius-xl);
   background: var(--glass-bg-elevated);
@@ -241,6 +263,8 @@ body {
   -webkit-backdrop-filter: var(--glass-blur-heavy);
   border: 1px solid var(--glass-border);
   box-shadow: var(--glass-shadow-lg);
+  display: flex;
+  flex-direction: column;
 }
 
 .home-library-header {
@@ -260,8 +284,8 @@ body {
 }
 
 .home-library-sections {
-  flex: none;
-  overflow: visible;
+  flex: 1 1 auto;
+  overflow: auto;
   padding: 0;
   min-height: 0;
   display: flex;

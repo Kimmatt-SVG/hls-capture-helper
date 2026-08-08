@@ -26,7 +26,9 @@ function titleFromFilename(filename) {
   return cleaned.replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
-function scanMoviesFolder(folderPath, location) {
+function scanMoviesFolder(folderPath, location, options = {}) {
+  const maxDepth = Number.isInteger(options.maxDepth) ? options.maxDepth : 3;
+
   if (!folderPath) {
     return {
       location,
@@ -49,9 +51,49 @@ function scanMoviesFolder(folderPath, location) {
     };
   }
 
-  let names;
+  const movies = [];
+
+  const walk = (dir, depth) => {
+    let names;
+    try {
+      names = fs.readdirSync(dir);
+    } catch (error) {
+      if (depth === 0) {
+        throw error;
+      }
+      return;
+    }
+
+    for (const name of names) {
+      const filePath = path.join(dir, name);
+      let stat;
+      try {
+        stat = fs.statSync(filePath);
+      } catch {
+        continue;
+      }
+
+      if (stat.isDirectory()) {
+        if (depth < maxDepth) walk(filePath, depth + 1);
+        continue;
+      }
+
+      if (!stat.isFile() || !isVideoFile(name) || stat.size < MIN_VIDEO_BYTES) continue;
+
+      const posterPath = findPosterForVideo(filePath);
+      movies.push({
+        filePath,
+        fileName: name,
+        title: titleFromFilename(name),
+        size: stat.size,
+        modifiedAt: stat.mtimeMs,
+        posterUrl: posterPath ? pathToFileURL(posterPath).href : null
+      });
+    }
+  };
+
   try {
-    names = fs.readdirSync(folderPath);
+    walk(folderPath, 0);
   } catch (error) {
     return {
       location,
@@ -61,32 +103,6 @@ function scanMoviesFolder(folderPath, location) {
       error: error.message,
       movies: []
     };
-  }
-
-  const movies = [];
-
-  for (const name of names) {
-    if (!isVideoFile(name)) continue;
-
-    const filePath = path.join(folderPath, name);
-    let stat;
-    try {
-      stat = fs.statSync(filePath);
-      if (!stat.isFile() || stat.size < MIN_VIDEO_BYTES) continue;
-    } catch {
-      continue;
-    }
-
-    const posterPath = findPosterForVideo(filePath);
-
-    movies.push({
-      filePath,
-      fileName: name,
-      title: titleFromFilename(name),
-      size: stat.size,
-      modifiedAt: stat.mtimeMs,
-      posterUrl: posterPath ? pathToFileURL(posterPath).href : null
-    });
   }
 
   movies.sort((a, b) => b.modifiedAt - a.modifiedAt);

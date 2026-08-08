@@ -64,17 +64,19 @@
     <section id="search-panel" class="search-panel">
       <div id="catalog-home" class="catalog-home">
         <div class="search-card catalog-home-hero">
-          <p class="catalog-brand" id="catalog-brand">Movie Stream Downloader</p>
-          <h1 id="landing-title">What do you want to watch?</h1>
-          <p id="landing-lead" class="search-lead">
-            Search the catalog, open a title, then save it as MP4 to your PC or NAS.
-          </p>
-          <ul class="search-features" id="search-features">
+          <div class="catalog-home-hero-copy">
+            <p class="catalog-brand" id="catalog-brand">Movie Stream Downloader</p>
+            <h1 id="landing-title">What do you want to watch?</h1>
+            <p id="landing-lead" class="search-lead">
+              Search the catalog, then save titles to your PC or NAS.
+            </p>
+          </div>
+          <ul class="search-features" id="search-features" hidden>
             <li>Custom catalog search — no website browsing</li>
             <li>Direct download when available, with poster art</li>
             <li>Queue movies for PC or NAS</li>
           </ul>
-          <form id="search-form" class="search-form" autocomplete="off">
+          <form id="search-form" class="search-form catalog-home-search" autocomplete="off">
             <input
               id="search-input"
               type="search"

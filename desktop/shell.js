@@ -1411,7 +1411,7 @@ function applyProfileLayout(env) {
   if (connectSiteButton) connectSiteButton.hidden = false;
 
   if (modeTabs) modeTabs.hidden = false;
-  if (searchFeatures) searchFeatures.hidden = false;
+  if (searchFeatures) searchFeatures.hidden = catalogMode;
   if (tvShowTitle) tvShowTitle.textContent = "TV Show Mode";
   if (tvShowBadge) tvShowBadge.hidden = false;
   setMovieToolbarVisible(true);
