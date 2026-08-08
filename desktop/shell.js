@@ -495,6 +495,8 @@ function renderLibraryItem(movie) {
   const item = document.createElement("li");
   item.className = "library-item";
   item.title = movie.title;
+  item.tabIndex = 0;
+  item.setAttribute("role", "button");
 
   if (movie.posterUrl) {
     const banner = document.createElement("img");
@@ -519,6 +521,18 @@ function renderLibraryItem(movie) {
   meta.appendChild(title);
 
   item.appendChild(meta);
+
+  const openMovie = () => {
+    if (movie.filePath) window.streamApp.openDownloadedMovie(movie.filePath);
+  };
+  item.addEventListener("click", openMovie);
+  item.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      openMovie();
+    }
+  });
+
   return item;
 }
 
@@ -625,6 +639,7 @@ function renderLibrarySection(section, label, location) {
 }
 
 async function refreshLibrary(force = false) {
+  if (!librarySections || !librarySummary) return;
   const now = Date.now();
   if (!force && now - lastLibraryRefreshAt < 4000) return;
 
@@ -632,15 +647,21 @@ async function refreshLibrary(force = false) {
   const library = await window.streamApp.getDownloadedMovies();
 
   librarySections.replaceChildren(
-    renderLibrarySection(library.local, "PC", "local"),
-    renderLibrarySection(library.nas, "NAS", "nas")
+    renderLibrarySection(library.local, "On this PC", "local"),
+    renderLibrarySection(library.nas, "On NAS", "nas")
   );
 
   const env = await window.streamApp.getEnvironment();
   librarySummary.textContent = `${library.totalCount} movie${library.totalCount === 1 ? "" : "s"} · NAS: ${formatLibraryPath(env.nasVideoFolder)}`;
+
+  if (catalogMode && catalogView === "home") {
+    window.shellMotion?.animateCatalogGrid?.(librarySections.querySelectorAll(".library-item"));
+  }
 }
 
-refreshLibraryButton.addEventListener("click", () => refreshLibrary(true));
+if (refreshLibraryButton) {
+  refreshLibraryButton.addEventListener("click", () => refreshLibrary(true));
+}
 
 function beginDownloadUi(destination) {
   downloadButton.disabled = true;

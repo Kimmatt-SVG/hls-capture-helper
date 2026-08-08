@@ -62,28 +62,41 @@
     </section>
 
     <section id="search-panel" class="search-panel">
-      <div id="catalog-home" class="search-card catalog-home">
-        <p class="catalog-brand" id="catalog-brand">Movie Stream Downloader</p>
-        <h1 id="landing-title">What do you want to watch?</h1>
-        <p id="landing-lead" class="search-lead">
-          Search the catalog, open a title, then save it as MP4 to your PC or NAS.
-        </p>
-        <ul class="search-features" id="search-features">
-          <li>Custom catalog search — no website browsing</li>
-          <li>Direct download when available, with poster art</li>
-          <li>Queue movies for PC or NAS</li>
-        </ul>
-        <form id="search-form" class="search-form" autocomplete="off">
-          <input
-            id="search-input"
-            type="search"
-            placeholder="e.g. inception, avengers endgame"
-            aria-label="Search movies"
-          />
-          <button type="submit" class="primary">Search</button>
-        </form>
-        <button id="browse-home" type="button" class="secondary browse-home" hidden>Browse Tornado Movies</button>
-        <p id="search-error" class="search-error"></p>
+      <div id="catalog-home" class="catalog-home">
+        <div class="search-card catalog-home-hero">
+          <p class="catalog-brand" id="catalog-brand">Movie Stream Downloader</p>
+          <h1 id="landing-title">What do you want to watch?</h1>
+          <p id="landing-lead" class="search-lead">
+            Search the catalog, open a title, then save it as MP4 to your PC or NAS.
+          </p>
+          <ul class="search-features" id="search-features">
+            <li>Custom catalog search — no website browsing</li>
+            <li>Direct download when available, with poster art</li>
+            <li>Queue movies for PC or NAS</li>
+          </ul>
+          <form id="search-form" class="search-form" autocomplete="off">
+            <input
+              id="search-input"
+              type="search"
+              placeholder="e.g. inception, avengers endgame"
+              aria-label="Search movies"
+            />
+            <button type="submit" class="primary">Search</button>
+          </form>
+          <button id="browse-home" type="button" class="secondary browse-home" hidden>Browse Tornado Movies</button>
+          <p id="search-error" class="search-error"></p>
+        </div>
+
+        <section id="home-library" class="home-library" aria-label="Downloaded movies">
+          <div class="library-header home-library-header">
+            <div>
+              <strong>Downloads</strong>
+              <span id="library-summary" class="library-summary">Scanning...</span>
+            </div>
+            <button id="refresh-library" type="button" class="library-refresh" title="Refresh list">↻</button>
+          </div>
+          <div id="library-sections" class="library-sections home-library-sections"></div>
+        </section>
       </div>
 
       <div id="catalog-results" class="catalog-results" hidden>
@@ -270,7 +283,7 @@
         </ul>
       </section>
 
-      <section class="activity-log-section">
+      <section class="activity-log-section activity-log-section-fill">
         <div class="activity-log-head">
           <div>
             <strong>Activity Log</strong>
@@ -285,15 +298,6 @@
           <p class="activity-log-empty">Download and stream events will appear here.</p>
         </div>
       </section>
-
-      <div class="library-header">
-        <div>
-          <strong>Downloads</strong>
-          <span id="library-summary" class="library-summary">Scanning...</span>
-        </div>
-        <button id="refresh-library" type="button" class="library-refresh" title="Refresh list">↻</button>
-      </div>
-      <div id="library-sections" class="library-sections"></div>
     </aside>
 
     <script src="shell.js"></script>
