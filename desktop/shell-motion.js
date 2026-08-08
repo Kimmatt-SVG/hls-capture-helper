@@ -52,8 +52,10 @@
     if (!ready() || !root) return;
     const level = motionLevel();
     const hero = root.querySelector(".catalog-home-hero") || root;
+    const queue = root.querySelector(".home-queue");
     const library = root.querySelector(".home-library");
     freeze(hero, { opacity: 0, y: level === "full" ? 14 : 0 });
+    if (queue) freeze(queue, { opacity: 0, y: level === "full" ? 16 : 0 });
     if (library) freeze(library, { opacity: 0, y: level === "full" ? 18 : 0 });
     api.animate(hero, {
       opacity: 1,
@@ -62,12 +64,22 @@
       ease: "outCubic",
       onComplete: () => clearInline(hero)
     });
+    if (queue) {
+      api.animate(queue, {
+        opacity: 1,
+        y: 0,
+        duration: level === "full" ? 480 : 180,
+        delay: level === "full" ? 90 : 0,
+        ease: "outCubic",
+        onComplete: () => clearInline(queue)
+      });
+    }
     if (library) {
       api.animate(library, {
         opacity: 1,
         y: 0,
         duration: level === "full" ? 520 : 180,
-        delay: level === "full" ? 120 : 0,
+        delay: level === "full" ? 160 : 0,
         ease: "outCubic",
         onComplete: () => clearInline(library)
       });

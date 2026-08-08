@@ -255,7 +255,7 @@ body {
 .home-library {
   width: 100%;
   flex: 1 1 auto;
-  min-height: 320px;
+  min-height: 280px;
   padding: 18px 20px 20px;
   border-radius: var(--radius-xl);
   background: var(--glass-bg-elevated);
@@ -265,6 +265,68 @@ body {
   box-shadow: var(--glass-shadow-lg);
   display: flex;
   flex-direction: column;
+}
+
+.home-queue {
+  width: 100%;
+  flex: 0 0 auto;
+  max-height: none;
+  min-height: 0;
+  margin: 0;
+  padding: 18px 20px 16px;
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--glass-border);
+  background: var(--glass-bg-elevated);
+  backdrop-filter: var(--glass-blur-heavy);
+  -webkit-backdrop-filter: var(--glass-blur-heavy);
+  box-shadow: var(--glass-shadow-lg);
+}
+
+.home-queue-header {
+  padding: 0 0 12px;
+  border-bottom: 1px solid var(--glass-border-subtle);
+  margin-bottom: 12px;
+}
+
+.home-queue-header strong {
+  font-size: 18px;
+  letter-spacing: -0.02em;
+}
+
+.home-queue .download-queue-summary {
+  margin-top: 6px;
+  font-size: 12px;
+}
+
+.home-queue-actions {
+  padding: 0 0 12px;
+  gap: 8px;
+}
+
+.home-queue-actions button {
+  flex: 0 1 auto;
+  min-width: 120px;
+  font-size: 12px;
+  padding: 9px 12px;
+}
+
+.home-queue-list {
+  max-height: 220px;
+  min-height: 72px;
+  padding: 0;
+  margin: 0;
+  overflow-y: auto;
+}
+
+.home-queue .download-queue-empty {
+  padding: 14px 4px 6px;
+  font-size: 13px;
+}
+
+.home-queue .download-queue-item {
+  margin: 0 0 8px;
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
 }
 
 .home-library-header {

@@ -745,7 +745,8 @@ function renderDownloadQueue(snapshot) {
   if (!items.length) {
     const empty = document.createElement("li");
     empty.className = "download-queue-empty";
-    empty.textContent = "Add movie pages to the queue. Each download gets a fresh link right before it starts.";
+    empty.textContent =
+      "Search the catalog and add titles here. Each download gets a fresh link right before it starts.";
     downloadQueueList.appendChild(empty);
     return;
   }

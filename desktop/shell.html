@@ -89,6 +89,31 @@
           <p id="search-error" class="search-error"></p>
         </div>
 
+        <section id="download-queue-section" class="download-queue-section home-queue" aria-label="Download queue">
+          <div class="download-queue-head home-queue-header">
+            <div>
+              <strong>Download Queue</strong>
+              <span id="download-queue-summary" class="download-queue-summary">0 movies queued</span>
+            </div>
+          </div>
+          <div class="download-queue-actions home-queue-actions">
+            <button id="add-search-to-queue" type="button" class="secondary" title="Add all movies from the current catalog search">
+              Add Search Results
+            </button>
+            <button id="add-current-to-queue" type="button" class="secondary" title="Add the selected catalog movie to the queue">
+              Add Current Movie
+            </button>
+            <button id="start-download-queue-local" type="button" class="primary">Queue → PC</button>
+            <button id="start-download-queue-nas" type="button" class="accent">Queue → NAS</button>
+            <button id="stop-download-queue" type="button" class="danger" hidden>Stop Queue</button>
+            <button id="clear-download-queue" type="button" class="secondary">Clear</button>
+            <button id="queue-debug-copy" type="button" class="secondary" title="Copy queue debug log">Queue Debug</button>
+          </div>
+          <ul id="download-queue-list" class="download-queue-list home-queue-list">
+            <li class="download-queue-empty">Search the catalog and add titles here. Each download gets a fresh link right before it starts.</li>
+          </ul>
+        </section>
+
         <section id="home-library" class="home-library" aria-label="Downloaded movies">
           <div class="library-header home-library-header">
             <div>
@@ -236,31 +261,6 @@
           TV Shows
         </button>
       </div>
-
-      <section id="download-queue-section" class="download-queue-section">
-        <div class="download-queue-head">
-          <div>
-            <strong>Download Queue</strong>
-            <span id="download-queue-summary" class="download-queue-summary">0 movies queued</span>
-          </div>
-        </div>
-        <div class="download-queue-actions">
-          <button id="add-search-to-queue" type="button" class="secondary" title="Add all movies from the current catalog search">
-            Add Search Results
-          </button>
-          <button id="add-current-to-queue" type="button" class="secondary" title="Add the selected catalog movie to the queue">
-            Add Current Movie
-          </button>
-          <button id="start-download-queue-local" type="button" class="primary">Queue → PC</button>
-          <button id="start-download-queue-nas" type="button" class="accent">Queue → NAS</button>
-          <button id="stop-download-queue" type="button" class="danger" hidden>Stop Queue</button>
-          <button id="clear-download-queue" type="button" class="secondary">Clear</button>
-          <button id="queue-debug-copy" type="button" class="secondary" title="Copy queue debug log">Queue Debug</button>
-        </div>
-        <ul id="download-queue-list" class="download-queue-list">
-          <li class="download-queue-empty">Add movie pages to the queue. Each download gets a fresh link right before it starts.</li>
-        </ul>
-      </section>
 
       <section id="tv-show-section" class="tv-show-section" hidden>
         <div class="tv-show-head">
