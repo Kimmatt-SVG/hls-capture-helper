@@ -27,6 +27,8 @@
       "shell.html",
       "shell.css",
       "shell.js",
+      "shell-motion.js",
+      "vendor/**/*",
       "anime-config.json",
       "lib/**/*"
     ],
@@ -71,6 +73,7 @@
   },
   "dependencies": {
     "@ghostery/adblocker-electron": "^2.18.0",
+    "animejs": "^4.5.0",
     "cross-fetch": "^4.1.0"
   }
 }

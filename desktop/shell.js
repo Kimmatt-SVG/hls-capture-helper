@@ -117,6 +117,7 @@ let catalogMode = false;
 let catalogMovies = [];
 let selectedCatalogMovie = null;
 let catalogView = "home";
+let catalogHomeAnimated = false;
 let siteLabel = "Tornado Movies";
 let pendingNasRetry = null;
 let lastLibraryRefreshAt = 0;
@@ -233,6 +234,7 @@ function hideSearchPanel() {
 
 function showCatalogView(view) {
   if (!catalogMode) return;
+  const previous = catalogView;
   catalogView = view;
   searchPanel.hidden = false;
   searchPanel.classList.add("catalog-mode");
@@ -240,6 +242,11 @@ function showCatalogView(view) {
   if (catalogResults) catalogResults.hidden = view !== "results";
   if (catalogDetail) catalogDetail.hidden = view !== "detail";
   reportChromeLayout();
+
+  if (view === "home" && catalogHome && (previous !== "home" || !catalogHomeAnimated)) {
+    catalogHomeAnimated = true;
+    window.shellMotion?.animateCatalogHome(catalogHome);
+  }
 }
 
 function renderCatalogPoster(container, movie, className) {
@@ -305,6 +312,7 @@ function renderCatalogGrid(movies, query) {
   }
 
   showCatalogView("results");
+  window.shellMotion?.animateCatalogGrid(catalogGrid.querySelectorAll(".catalog-card"));
 }
 
 function renderCatalogDetail(movie) {
@@ -317,7 +325,11 @@ function renderCatalogDetail(movie) {
   if (catalogDetailPoster) {
     renderCatalogPoster(catalogDetailPoster, movie, "catalog-detail-poster-fallback");
   }
+  const wasDetail = catalogView === "detail";
   showCatalogView("detail");
+  if (!wasDetail) {
+    window.shellMotion?.animateCatalogDetail(catalogDetail);
+  }
 }
 
 async function openCatalogMovie(movie) {
@@ -392,6 +404,7 @@ async function addSelectedCatalogMovieToQueue(destination = "local") {
 
   appendActivityLog("success", `Added “${result.item.title}” to queue`);
   if (catalogDetailStatus) catalogDetailStatus.textContent = "Added to download queue.";
+  window.shellMotion?.pulseQueueChrome();
   return result;
 }
 
@@ -1794,6 +1807,7 @@ addSearchToQueueButton.addEventListener("click", async () => {
       ? `Added ${added} movie${added === 1 ? "" : "s"} to queue${skipped ? ` (${skipped} skipped)` : ""}`
       : "No new movies added to the queue."
   );
+  if (added) window.shellMotion?.pulseQueueChrome();
 });
 
 addCurrentToQueueButton.addEventListener("click", async () => {
@@ -1808,6 +1822,7 @@ addCurrentToQueueButton.addEventListener("click", async () => {
     return;
   }
   appendActivityLog("success", `Added "${result.item.title}" to queue`);
+  window.shellMotion?.pulseQueueChrome();
 });
 
 if (catalogBackHome) {
@@ -1837,6 +1852,7 @@ if (catalogQueueAll) {
     }
     const added = result.added?.length || 0;
     appendActivityLog("success", `Added ${added} movie${added === 1 ? "" : "s"} to queue`);
+    if (added) window.shellMotion?.pulseQueueChrome();
   });
 }
 
