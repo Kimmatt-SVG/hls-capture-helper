@@ -33,8 +33,24 @@ function buildTornadoSearchScraperScript() {
       .replace(/\\b\\w/g, (char) => char.toUpperCase());
   };
 
+  const resolveUrl = (raw) => {
+    if (!raw || raw.startsWith("data:")) return "";
+    try {
+      return new URL(raw, window.location.href).href;
+    } catch {
+      return "";
+    }
+  };
+
   const pickPoster = (root) => {
     if (!root) return "";
+    const posterNode =
+      (root.matches?.(".poster, [data-img]") ? root : null) ||
+      root.closest?.(".poster, [data-img]") ||
+      root.querySelector?.(".poster, [data-img]");
+    const dataImg = posterNode?.getAttribute?.("data-img") || "";
+    if (dataImg) return resolveUrl(dataImg);
+
     const img =
       root.querySelector("img[src], img[data-src], img[data-original], img[data-lazy-src]") ||
       (root.closest("article, .item, .flw-item, .film-poster, .movie-item, .card, li, .col, .grid-item") || root)
@@ -47,13 +63,18 @@ function buildTornadoSearchScraperScript() {
       img.getAttribute("data-original") ||
       img.getAttribute("data-lazy-src") ||
       "";
-    if (!raw || raw.startsWith("data:")) return "";
-    try {
-      return new URL(raw, window.location.href).href;
-    } catch {
-      return "";
-    }
+    return resolveUrl(raw);
   };
+
+  const cleanTitle = (value) =>
+    String(value || "")
+      .replace(/\\s+/g, " ")
+      .replace(/^watch\\s+/i, "")
+      .replace(/\\s+online\\b.*$/i, "")
+      .replace(/\\s+in\\s+hd\\b.*$/i, "")
+      .replace(/\\s+[|–]\\s+.*$/i, "")
+      .replace(/\\s+-\\s+.*$/i, "")
+      .trim();
 
   const yearFromText = (text) => {
     const match = String(text || "").match(/\\b(19|20)\\d{2}\\b/);
@@ -69,18 +90,21 @@ function buildTornadoSearchScraperScript() {
       if (!href || !/\\/movie\\/[^/]+\\/[^/?#]+/i.test(href)) continue;
 
       const card =
-        element.closest("article, .item, .flw-item, .film-poster, .movie-item, .card, li, .col, .grid-item, .movie") ||
-        element.parentElement;
-      const text = String(element.textContent || "").trim();
-      const titleAttr = String(element.getAttribute("title") || element.getAttribute("aria-label") || "").trim();
-      const imgAlt = String(card?.querySelector?.("img")?.alt || "").trim();
+        element.closest(
+          ".poster, article, .item, .flw-item, .film-poster, .movie-item, .card, li, .col, .grid-item, .movie"
+        ) || element.parentElement;
+      const dataName = cleanTitle(card?.getAttribute?.("data-name") || "");
+      const text = cleanTitle(element.textContent || "");
+      const titleAttr = cleanTitle(element.getAttribute("title") || element.getAttribute("aria-label") || "");
+      const imgAlt = cleanTitle(card?.querySelector?.("img")?.alt || "");
       const title =
+        (dataName && dataName.length < 120 ? dataName : "") ||
         (text && text.length < 80 ? text : "") ||
         (titleAttr && titleAttr.length < 100 ? titleAttr : "") ||
         (imgAlt && imgAlt.length < 100 ? imgAlt : "") ||
         titleFromUrl(href);
       const posterUrl = pickPoster(element) || pickPoster(card);
-      const year = yearFromText(card?.textContent || text || titleAttr);
+      const year = yearFromText(card?.getAttribute?.("data-name") || card?.textContent || text || titleAttr);
 
       const existing = found.get(href);
       if (!existing) {
@@ -114,33 +138,44 @@ function buildTornadoSearchScraperScript() {
       return { ok: false, error: "Not on a movie page." };
     }
 
-    const title = (
-      document.querySelector('meta[property="og:title"]')?.content ||
-      document.querySelector("h1")?.textContent ||
-      document.title ||
-      titleFromUrl(href)
-    )
-      .replace(/\\s*[|\\-–].*$/, "")
-      .trim();
+    const pathMatch = location.pathname.match(/\\/movie\\/([^/]+)\\/([^/]+)/i);
+    const slug = pathMatch?.[1] || "";
+    const movieId = pathMatch?.[2] || "";
+
+    const matchingPoster =
+      (movieId && document.querySelector('.poster[data-id="' + movieId + '"]')) ||
+      (slug &&
+        [...document.querySelectorAll(".poster[data-href], .poster[data-name]")].find((node) => {
+          const dataHref = String(node.getAttribute("data-href") || "");
+          return dataHref.includes("/movie/" + slug + "/");
+        })) ||
+      null;
+
+    const title = cleanTitle(
+      matchingPoster?.getAttribute("data-name") ||
+        document.querySelector('meta[property="og:title"]')?.content ||
+        document.querySelector("h1")?.textContent ||
+        document.title ||
+        titleFromUrl(href)
+    );
 
     const posterCandidates = [
+      matchingPoster?.getAttribute("data-img"),
       document.querySelector('meta[property="og:image"]')?.content,
       document.querySelector('meta[name="twitter:image"]')?.content,
-      document.querySelector(".film-poster img, .movie-poster img, .poster img, img.poster")?.src
+      matchingPoster?.querySelector("img")?.src,
+      document.querySelector(".film-poster img, .movie-poster img, img.poster")?.src
     ].filter(Boolean);
 
     let posterUrl = "";
     for (const raw of posterCandidates) {
-      try {
-        posterUrl = new URL(raw, location.href).href;
-        if (posterUrl && !posterUrl.startsWith("data:")) break;
-      } catch {
-        // keep looking
-      }
+      posterUrl = resolveUrl(raw);
+      if (posterUrl) break;
     }
 
     const year = yearFromText(
-      document.querySelector(".film-stats, .movie-info, .detail, .description, h1")?.textContent ||
+      matchingPoster?.getAttribute("data-name") ||
+        document.querySelector(".film-stats, .movie-info, .detail, .description, h1")?.textContent ||
         document.body?.innerText?.slice(0, 800) ||
         ""
     );

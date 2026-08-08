@@ -927,6 +927,10 @@ button:disabled {
   background: rgba(100, 210, 255, 0.04);
 }
 
+.tv-show-section[hidden] {
+  display: none !important;
+}
+
 .tv-show-head {
   display: flex;
   align-items: flex-start;
@@ -1024,6 +1028,10 @@ button:disabled {
   min-height: 150px;
   border-bottom: 1px solid var(--glass-border-subtle);
   background: rgba(255, 255, 255, 0.02);
+}
+
+.download-queue-section[hidden] {
+  display: none !important;
 }
 
 .download-queue-head {

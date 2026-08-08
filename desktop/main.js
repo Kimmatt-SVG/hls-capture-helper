@@ -1000,9 +1000,13 @@ async function catalogSearch(query) {
   hideBrowserView();
 
   try {
-    await loadUrlAndWait(browserView.webContents, url, { settleMs: 1600 });
-    await delay(400);
-    const scrape = await scrapeSearchMovieLinks(browserView.webContents);
+    await loadUrlAndWait(browserView.webContents, url, { settleMs: 2200 });
+    await delay(800);
+    let scrape = await scrapeSearchMovieLinks(browserView.webContents);
+    if (!scrape.movies?.length) {
+      await delay(1500);
+      scrape = await scrapeSearchMovieLinks(browserView.webContents);
+    }
     if (!scrape.ok) {
       return { ok: false, error: scrape.error || "Search scrape failed.", query: trimmed, url, movies: [] };
     }
@@ -1136,7 +1140,8 @@ async function createWindow() {
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
-      nodeIntegration: false
+      nodeIntegration: false,
+      partition: appProfile.browserPartition
     }
   });
 
@@ -1154,6 +1159,18 @@ async function createWindow() {
     layoutBrowserView();
   }
   mainWindow.on("resize", layoutBrowserView);
+
+  // Catalog posters load in the shell; Tornado CDN often requires site referer.
+  mainWindow.webContents.session.webRequest.onBeforeSendHeaders(
+    { urls: ["https://*.tornadomovies.co/*", "https://static.tornadomovies.co/*"] },
+    (details, callback) => {
+      const requestHeaders = { ...details.requestHeaders };
+      if (!requestHeaders.Referer && !requestHeaders.referer) {
+        requestHeaders.Referer = `${SITE_BASE_URL}/`;
+      }
+      callback({ requestHeaders });
+    }
+  );
 
   const browserSession = browserView.webContents.session;
   setupChromeCompatibility(browserSession, browserView.webContents);

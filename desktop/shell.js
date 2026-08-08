@@ -1250,6 +1250,19 @@ async function refreshDetection() {
   const { playlists, best, bestDirect } = await window.streamApp.getPlaylists();
   const target = bestDirect || best;
 
+  if (catalogMode) {
+    if (target && selectedCatalogMovie) {
+      streamStatus.textContent = bestDirect
+        ? `Direct ${bestDirect.qualityLabel} download ready · ${bestDirect.displayUrl}`
+        : `Stream ready (${best?.kind || "hls"}) · ${best?.displayUrl || ""}`;
+      if (download.state === "idle") {
+        downloadButton.disabled = false;
+        saveNasButton.disabled = false;
+      }
+    }
+    return;
+  }
+
   if (!target) {
     streamStatus.textContent =
       playlists.length === 0
@@ -2104,6 +2117,12 @@ window.streamApp.onTvShowUpdated((payload) => {
 
 window.streamApp.onStreamCaptureReset(() => {
   downloadStatus.textContent = "";
+  if (catalogMode) {
+    if (!selectedCatalogMovie) {
+      streamStatus.textContent = "Search the catalog to begin.";
+    }
+    return;
+  }
   streamStatus.textContent =
     "Stream capture reset — pause/play or seek the video to refresh, then download again.";
   downloadButton.disabled = true;
