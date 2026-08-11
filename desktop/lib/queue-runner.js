@@ -50,6 +50,34 @@ function isRetryableDownloadError(error) {
 }
 
 async function processQueueItem(item, queue, deps) {
+  if (item.kind === "episode") {
+    if (!deps.processEpisode) {
+      return { failed: "Episode downloads are not available in this queue." };
+    }
+
+    queue.setCurrent(item.id);
+    deps.onDebug?.("item-start", `Processing episode ${item.title}`, {
+      itemId: item.id,
+      movieUrl: item.movieUrl,
+      destination: item.destination,
+      kind: "episode"
+    });
+    deps.onProgress?.({
+      phase: "loading",
+      item,
+      snapshot: queue.snapshot()
+    });
+
+    const outcome = await deps.processEpisode(item, queue);
+    if (outcome?.cancelled || queue.cancelRequested) {
+      return { cancelled: true };
+    }
+    if (outcome?.ok) {
+      return { ok: true };
+    }
+    return { failed: outcome?.error || "Episode download failed." };
+  }
+
   const maxAttempts = 3;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {

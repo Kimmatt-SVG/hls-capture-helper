@@ -26,6 +26,48 @@ function findFfmpeg() {
     if (candidate && fs.existsSync(candidate)) return candidate;
   }
 
+  try {
+    const wingetRoot = path.join(
+      process.env.LOCALAPPDATA || "",
+      "Microsoft",
+      "WinGet",
+      "Packages"
+    );
+    if (fs.existsSync(wingetRoot)) {
+      const packages = fs.readdirSync(wingetRoot).filter((name) => /ffmpeg/i.test(name));
+      for (const pkg of packages) {
+        const bin = path.join(wingetRoot, pkg, "ffmpeg-8.1.2-full_build", "bin", "ffmpeg.exe");
+        // Prefer any nested bin/ffmpeg.exe
+        const matches = [];
+        const stack = [path.join(wingetRoot, pkg)];
+        while (stack.length && matches.length < 3) {
+          const dir = stack.pop();
+          let names = [];
+          try {
+            names = fs.readdirSync(dir);
+          } catch {
+            continue;
+          }
+          for (const name of names) {
+            const full = path.join(dir, name);
+            if (name.toLowerCase() === "ffmpeg.exe") matches.push(full);
+            else if (!name.includes(".")) {
+              try {
+                if (fs.statSync(full).isDirectory()) stack.push(full);
+              } catch {
+                // skip
+              }
+            }
+          }
+        }
+        if (matches[0]) return matches[0];
+        if (fs.existsSync(bin)) return bin;
+      }
+    }
+  } catch {
+    // Ignore winget lookup failures.
+  }
+
   return null;
 }
 

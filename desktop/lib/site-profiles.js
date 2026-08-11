@@ -14,10 +14,10 @@ const MOVIES_PROFILE = {
   searchPathTemplate: "/search_all/~{query}~",
   brandLabel: "Movie Stream Downloader",
   siteLabel: "Tornado Movies",
-  searchPlaceholder: "Search movies (e.g. avengers endgame)",
+  searchPlaceholder: "Search movies & TV (e.g. the last of us)",
   landingTitle: "What do you want to watch?",
   landingLead:
-    "Search our catalog, open a title, then save it as MP4 to your PC or NAS.",
+    "Search movies and TV shows, open a title, then save it as MP4 to your PC or NAS.",
   openAnimeButton: true,
   hideMovieDownloader: false,
   defaultSidebarMode: "movies",

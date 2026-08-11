@@ -7,6 +7,7 @@ const {
   dialog
 } = require("electron");
 const path = require("path");
+const fs = require("fs");
 const { spawn, exec } = require("child_process");
 const { HlsCapture } = require("./lib/hls-capture");
 const { DirectDownloadCapture, isDirectDownloadUrl } = require("./lib/direct-download-capture");
@@ -27,7 +28,7 @@ const { outputNameFromPageUrl } = require("./lib/page-utils");
 const { resolveBestFromCandidates, diagnoseStreamCandidates } = require("./lib/hls-quality");
 const { findFfprobe, probeStream } = require("./lib/stream-probe");
 const { streamDebug } = require("./lib/stream-debug");
-const { saveArtworkForPage } = require("./lib/artwork");
+const { saveArtworkForPage, saveShowPoster, extractArtworkUrl, downloadArtwork } = require("./lib/artwork");
 const { findPosterForVideo, embedPosterInVideoAsync } = require("./lib/poster-utils");
 const { SITE_HOME_URL, SITE_BASE_URL, SITE_LOGIN_URL, buildSearchUrl, getSiteProfile } = require("./lib/site-config");
 const { isAnimeMode } = require("./lib/site-profiles");
@@ -35,7 +36,7 @@ const { isAniwaveUrl, prepareAniwavePlayer, inspectAniwavePlayer, waitForAniwave
 const { sessionHlsProxy, shouldProxyStreamUrl } = require("./lib/session-hls-proxy");
 const { loadSiteCredentials, saveSiteCredentials } = require("./lib/site-auth");
 const { setupSiteAutoLogin } = require("./lib/site-auto-login");
-const { listDownloadedMovies } = require("./lib/download-library");
+const { listDownloadedMovies, findShowPoster, posterUrlForPath } = require("./lib/download-library");
 const { syncLocalMoviesToNas } = require("./lib/library-sync");
 const { cleanupStaleDownloadArtifacts } = require("./lib/download-cleanup");
 const { DownloadQueue, titleFromMovieUrl, normalizeMovieUrl } = require("./lib/download-queue");
@@ -54,7 +55,9 @@ const {
   extractDownloadIds,
   extractGetbuttonId,
   isTvShowPageUrl,
-  isDownloadableContentUrl
+  isDownloadableContentUrl,
+  episodeFileLabel,
+  safeShowFolderName
 } = require("./lib/tv-url-utils");
 
 const appProfile = getSiteProfile();
@@ -633,6 +636,203 @@ async function fetchAniwaveEpisodeStream(contents, episode, options = {}) {
   };
 }
 
+async function resolveQueueOutputDir(destination = "local") {
+  let outputDir = outputDirectory();
+  if (destination === "nas") {
+    const nas = loadNasConfig();
+    const access = ensureNasFolder(nas.videoFolder);
+    if (!access.ok) {
+      return { ok: false, error: access.error, needsCredentials: Boolean(access.needsCredentials) };
+    }
+    outputDir = access.path;
+  }
+  return { ok: true, outputDir };
+}
+
+async function processQueueEpisodeItem(item, queue) {
+  const destination = item.destination === "nas" ? "nas" : "local";
+  const resolved = await resolveQueueOutputDir(destination);
+  if (!resolved.ok) {
+    return { ok: false, error: resolved.error };
+  }
+
+  const useAniwaveHls = isAnimeMode() || getSiteProfile().id === "anime" || isAniwaveUrl(item.movieUrl);
+  const showTitle = item.showTitle || "TV Show";
+  const season = item.season || 1;
+  const seasonLabel = `Season ${String(season).padStart(2, "0")}`;
+  const folderName = safeShowFolderName(showTitle);
+  const rootFolder = useAniwaveHls ? "" : "TV Shows";
+  const showFolder = path.join(resolved.outputDir, rootFolder, folderName);
+  const seasonDir = path.join(showFolder, seasonLabel);
+  fs.mkdirSync(seasonDir, { recursive: true });
+
+  const label = episodeFileLabel(season, item.episode || 1);
+  const episodeName = `${label} - ${item.episodeTitle || "Episode"}.mp4`.replace(/[<>:"/\\|?*]+/g, "_");
+  const episodePath = path.join(seasonDir, episodeName);
+  const session = browserView?.webContents?.session;
+  const ffmpegPath = findFfmpeg();
+  void ffmpegPath;
+
+  queue.markDownloading(item.id);
+  notifyQueueUpdate({
+    phase: "loading",
+    item,
+    snapshot: downloadQueue.snapshot()
+  });
+
+  try {
+    syncAdblockerForUrl(item.movieUrl);
+    await loadContentPageForDownload(item.movieUrl);
+    if (useAniwaveHls && isAniwaveUrl(item.movieUrl)) {
+      const contents = browserView?.webContents;
+      await waitForAniwaveServers(contents, 35000);
+    }
+  } catch (error) {
+    return { ok: false, error: error.message || String(error) };
+  }
+
+  if (queue.cancelRequested) return { cancelled: true };
+
+  notifyQueueUpdate({
+    phase: "fetching-link",
+    item,
+    snapshot: downloadQueue.snapshot()
+  });
+
+  const contents = browserView?.webContents;
+  let link;
+  if (useAniwaveHls && isAniwaveUrl(item.movieUrl)) {
+    link = await fetchAniwaveEpisodeStream(
+      contents,
+      {
+        url: item.movieUrl,
+        season: item.season,
+        episode: item.episode,
+        title: item.episodeTitle
+      },
+      { preferDub: true }
+    );
+  } else {
+    const result = await fetchFreshDirectDownloadLink(contents, { movieUrl: item.movieUrl });
+    if (!result.ok || !result.best?.url) {
+      return { ok: false, error: result.error || "Could not generate episode download link." };
+    }
+    const rawPageUrl = contents?.getURL() || item.movieUrl;
+    const pageUrl = canonicalMoviePageUrl(rawPageUrl) || canonicalContentUrl(rawPageUrl) || rawPageUrl;
+    const headers = await streamHeadersForDownload(result.best.requestHeaders || [], pageUrl, {
+      targetUrl: result.best.url,
+      session
+    });
+    link = {
+      ok: true,
+      url: result.best.url,
+      headers,
+      qualityLabel: result.best.qualityLabel || null,
+      mode: "direct"
+    };
+  }
+
+  if (!link?.ok || !link.url) {
+    return { ok: false, error: link?.error || "Could not get a download link." };
+  }
+  if (queue.cancelRequested) return { cancelled: true };
+
+  try {
+    let posterUrl = item.posterUrl || null;
+    if (!posterUrl) posterUrl = await extractArtworkUrl(contents);
+    if (posterUrl) {
+      await saveShowPoster(posterUrl, link.headers || [], showFolder);
+    }
+  } catch {
+    // Official artwork is optional; episode download can continue.
+  }
+
+  notifyQueueUpdate({
+    phase: "preparing",
+    item,
+    snapshot: downloadQueue.snapshot()
+  });
+
+  if (ffmpegRunner.isJobRunning()) {
+    return { ok: false, error: "Another download is already running." };
+  }
+
+  ffmpegRunner.beginPrepare({
+    destination,
+    phase: `Downloading ${label}...`,
+    percent: 5
+  });
+
+  const startOptions = {
+    outputDir: seasonDir,
+    destination,
+    qualityLabel: link.qualityLabel || null,
+    phase: `Downloading ${label}...`
+  };
+  const started =
+    link.mode === "hls"
+      ? await ffmpegRunner.start(link.url, link.headers || [], path.basename(episodePath), startOptions)
+      : await ffmpegRunner.startDirect(link.url, link.headers || [], path.basename(episodePath), startOptions);
+
+  if (!started.ok) {
+    ffmpegRunner.clearJob();
+    return { ok: false, error: started.error || "Episode download failed to start." };
+  }
+
+  const actualOutputPath = started.outputPath || episodePath;
+  const startedAt = Date.now();
+  const timeoutMs = 8 * 60 * 60 * 1000;
+
+  while (Date.now() - startedAt < timeoutMs) {
+    if (queue.cancelRequested) {
+      await ffmpegRunner.stop();
+      ffmpegRunner.clearJob();
+      return { cancelled: true };
+    }
+
+    const status = ffmpegRunner.getStatus();
+    if (status.state === "finished") {
+      try {
+        await saveArtworkForPage(contents, link.headers || [], actualOutputPath);
+      } catch {
+        // Episode sidecar poster is optional.
+      }
+      ffmpegRunner.clearJob();
+      return { ok: true, outputPath: actualOutputPath };
+    }
+    if (status.state === "failed") {
+      const error = status.lastLogLine || status.phase || "Episode download failed.";
+      try {
+        if (fs.statSync(actualOutputPath).size > 0) {
+          ffmpegRunner.clearJob();
+          return { ok: true, outputPath: actualOutputPath };
+        }
+      } catch {
+        // ignore missing file
+      }
+      ffmpegRunner.clearJob();
+      return { ok: false, error };
+    }
+    if (status.state === "idle") {
+      try {
+        if (fs.statSync(actualOutputPath).size > 0) {
+          ffmpegRunner.clearJob();
+          return { ok: true, outputPath: actualOutputPath };
+        }
+      } catch {
+        // ignore
+      }
+      ffmpegRunner.clearJob();
+      return { ok: false, error: "Episode download ended before completion." };
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+
+  ffmpegRunner.clearJob();
+  return { ok: false, error: "Episode download timed out." };
+}
+
 async function runTvShowDownloadJob(destination = "local") {
   if (tvShowProcessing) {
     return { ok: false, error: "A TV show download is already running." };
@@ -762,6 +962,9 @@ async function runDownloadQueue() {
   if (queueProcessing) {
     return { ok: false, error: "Queue is already running." };
   }
+  if (tvShowProcessing) {
+    return { ok: false, error: "Stop the TV download before starting the queue." };
+  }
 
   queueProcessing = true;
   ensureBrowserVisible();
@@ -789,6 +992,7 @@ async function runDownloadQueue() {
       },
       startDownload: (destination) =>
         startStreamDownload(destination, { directOnly: true, skipLinkPrepare: true }),
+      processEpisode: (item, queue) => processQueueEpisodeItem(item, queue),
       runner: ffmpegRunner,
       clearJob: () => ffmpegRunner.clearJob(),
       stopDownload: () => ffmpegRunner.stop(),
@@ -989,7 +1193,7 @@ function loadSearch(query) {
 async function catalogSearch(query) {
   const trimmed = String(query || "").trim();
   if (!trimmed) {
-    return { ok: false, error: "Enter a movie title to search.", movies: [] };
+    return { ok: false, error: "Enter a title to search.", movies: [] };
   }
   if (!browserView?.webContents || browserView.webContents.isDestroyed()) {
     return { ok: false, error: "Browser is not ready.", movies: [] };
@@ -1013,29 +1217,49 @@ async function catalogSearch(query) {
     if (!scrape.movies?.length) {
       return {
         ok: false,
-        error: `No movies found for "${trimmed}".`,
+        error: `No movies or TV shows found for "${trimmed}".`,
         query: trimmed,
         url,
         movies: []
       };
     }
-    return { ok: true, query: trimmed, url, movies: scrape.movies };
+    return {
+      ok: true,
+      query: trimmed,
+      url,
+      movies: scrape.movies,
+      counts: scrape.counts || null
+    };
   } catch (error) {
     return { ok: false, error: error.message || String(error), query: trimmed, url, movies: [] };
   }
 }
 
 async function catalogOpenMovie(movieUrl, fallback = {}) {
-  const targetUrl = canonicalMoviePageUrl(movieUrl) || normalizeMovieUrl(movieUrl) || String(movieUrl || "");
-  if (!/\/movie\//i.test(targetUrl)) {
+  const rawUrl = String(movieUrl || fallback.movieUrl || "");
+  const kindHint = fallback.kind === "tv" || /\/(?:tv-series|tv|serie|series)\//i.test(rawUrl) ? "tv" : "movie";
+  const targetUrl =
+    kindHint === "movie"
+      ? canonicalMoviePageUrl(rawUrl) || normalizeMovieUrl(rawUrl) || rawUrl
+      : canonicalContentUrl(rawUrl) || rawUrl;
+
+  if (kindHint === "movie" && !/\/movie\//i.test(targetUrl)) {
     return { ok: false, error: "Invalid movie URL." };
+  }
+  if (kindHint === "tv" && !/\/(?:tv-series|tv|serie|series)\//i.test(targetUrl)) {
+    return { ok: false, error: "Invalid TV show URL." };
   }
 
   try {
-    await loadMoviePageForQueue(targetUrl);
+    if (kindHint === "movie") {
+      await loadMoviePageForQueue(targetUrl);
+    } else {
+      await loadContentPageForDownload(targetUrl);
+    }
     const scrape = await scrapeMovieDetail(browserView.webContents);
     const movie = {
-      movieUrl: targetUrl,
+      kind: scrape.movie?.kind || kindHint,
+      movieUrl: scrape.movie?.movieUrl || targetUrl,
       title: scrape.movie?.title || fallback.title || titleFromMovieUrl(targetUrl),
       posterUrl: scrape.movie?.posterUrl || fallback.posterUrl || undefined,
       year: scrape.movie?.year || fallback.year || undefined
@@ -1046,6 +1270,7 @@ async function catalogOpenMovie(movieUrl, fallback = {}) {
       ok: false,
       error: error.message || String(error),
       movie: {
+        kind: kindHint,
         movieUrl: targetUrl,
         title: fallback.title || titleFromMovieUrl(targetUrl),
         posterUrl: fallback.posterUrl,
@@ -1454,6 +1679,7 @@ ipcMain.handle("catalog-open-movie", async (_event, payload = {}) => {
     return { ok: false, error: "Catalog mode is only available in the movie app." };
   }
   return catalogOpenMovie(payload.movieUrl, {
+    kind: payload.kind,
     title: payload.title,
     posterUrl: payload.posterUrl,
     year: payload.year
@@ -2018,15 +2244,26 @@ ipcMain.handle("add-search-results-to-queue", async (_event, destination = "loca
     if (!scrape.ok || !scrape.movies?.length) {
       return {
         ok: false,
-        error: scrape.error || "No movies found. Search the catalog first."
+        error: scrape.error || "No titles found. Search the catalog first."
       };
     }
     list = scrape.movies;
   }
 
-  const result = downloadQueue.addMany(list, destination);
+  const movieEntries = list.filter(
+    (entry) => entry?.kind !== "tv" && /\/movie\//i.test(String(entry?.movieUrl || entry || ""))
+  );
+  if (!movieEntries.length) {
+    return {
+      ok: false,
+      error: "No movies in these results to queue. Open a TV show to scan its episodes instead."
+    };
+  }
+
+  const result = downloadQueue.addMany(movieEntries, destination);
   queueDebug("queue-add-many", `Added ${result.added?.length || 0} movies from search`, {
     found: list.length,
+    movieCandidates: movieEntries.length,
     added: result.added?.map((item) => ({
       title: item.title,
       movieUrl: item.movieUrl,
@@ -2054,9 +2291,12 @@ ipcMain.handle("start-download-queue", async (_event, destination = "local") => 
   if (queueProcessing) {
     return { ok: false, error: "Queue is already running." };
   }
+  if (tvShowProcessing) {
+    return { ok: false, error: "Stop the TV download before starting the queue." };
+  }
 
   if (!downloadQueue.nextPending()) {
-    return { ok: false, error: "Queue is empty. Add movies first." };
+    return { ok: false, error: "Queue is empty. Add movies or TV episodes first." };
   }
 
   const normalizedDestination = destination === "nas" ? "nas" : "local";
@@ -2101,6 +2341,7 @@ ipcMain.handle("scan-tv-show", async () => {
     showTitle: scan.showTitle,
     season: scan.season || scan.episodes[0]?.season || 1,
     showUrl: scan.showUrl || pageUrl,
+    posterUrl: scan.posterUrl || null,
     episodes: scan.episodes,
     scannedAt: Date.now(),
     notes: scan.notes || []
@@ -2113,6 +2354,37 @@ ipcMain.handle("scan-tv-show", async () => {
   });
 
   return { ok: true, plan: tvShowPlan };
+});
+
+ipcMain.handle("add-tv-plan-to-queue", (_event, destination = "local") => {
+  if (!tvShowPlan?.episodes?.length) {
+    return { ok: false, error: "Scan a TV show season first." };
+  }
+  if (queueProcessing) {
+    return { ok: false, error: "Stop the queue before adding more episodes." };
+  }
+
+  const normalizedDestination = destination === "nas" ? "nas" : "local";
+  const result = downloadQueue.addEpisodes(tvShowPlan.episodes, {
+    showTitle: tvShowPlan.showTitle,
+    posterUrl: tvShowPlan.posterUrl || null,
+    destination: normalizedDestination
+  });
+
+  queueDebug("queue-add-season", `Queued ${result.added.length} episode(s) from ${tvShowPlan.showTitle}`, {
+    showTitle: tvShowPlan.showTitle,
+    season: tvShowPlan.season,
+    added: result.added.length,
+    skipped: result.skipped.length,
+    destination: normalizedDestination
+  });
+  notifyQueueUpdate();
+  return {
+    ok: true,
+    added: result.added,
+    skipped: result.skipped,
+    plan: tvShowPlan
+  };
 });
 
 ipcMain.handle("get-tv-show-plan", () => ({
@@ -2132,7 +2404,7 @@ ipcMain.handle("clear-tv-show-plan", () => {
 
 ipcMain.handle("start-tv-show-download", async (_event, destination = "local") => {
   if (queueProcessing) {
-    return { ok: false, error: "Stop the movie queue before starting a TV show download." };
+    return { ok: false, error: "Stop the download queue before starting a direct TV download." };
   }
   if (ffmpegRunner.isJobRunning()) {
     return { ok: false, error: "A download is already running." };
@@ -2149,6 +2421,7 @@ ipcMain.handle("start-tv-show-download", async (_event, destination = "local") =
 
 ipcMain.handle("stop-tv-show-download", async () => {
   tvShowCancelRequested = true;
+  downloadQueue.requestCancel();
   await ffmpegRunner.stop();
   notifyTvShowUpdate({ phase: "stopping" });
   return { ok: true };
@@ -2273,13 +2546,81 @@ ipcMain.handle("open-output-folder", () => {
   return { ok: true };
 });
 
-ipcMain.handle("get-downloaded-movies", () => {
+function normalizeTitleKey(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function showNeedsOfficialPoster(show) {
+  if (!show?.folderPath) return false;
+  const existing = findShowPoster(show.folderPath);
+  if (!existing) return true;
+  try {
+    // Frame-grab thumbnails from the old approach were typically very small.
+    return fs.statSync(existing).size < 40 * 1024;
+  } catch {
+    return true;
+  }
+}
+
+async function backfillOfficialShowPosters(library) {
+  const shows = [...(library?.local?.movies || []), ...(library?.nas?.movies || [])].filter(
+    (entry) => entry?.kind === "tv-show" && showNeedsOfficialPoster(entry)
+  );
+  if (!shows.length) return library;
+
+  // One search at a time; keep this short so Electron doesn't thrash the hidden browser.
+  for (const show of shows.slice(0, 4)) {
+    try {
+      const search = await catalogSearch(show.title);
+      if (!search.ok || !search.movies?.length) continue;
+      const want = normalizeTitleKey(show.title);
+      const match =
+        search.movies.find(
+          (item) =>
+            (item.kind === "tv" || /\/(?:tv-series|tv|serie|series)\//i.test(item.movieUrl || "")) &&
+            normalizeTitleKey(item.title) === want &&
+            item.posterUrl
+        ) ||
+        search.movies.find(
+          (item) =>
+            (item.kind === "tv" || /\/(?:tv-series|tv|serie|series)\//i.test(item.movieUrl || "")) &&
+            normalizeTitleKey(item.title).includes(want) &&
+            item.posterUrl
+        ) ||
+        search.movies.find((item) => item.posterUrl && normalizeTitleKey(item.title).includes(want));
+
+      if (!match?.posterUrl) continue;
+      const saved = await saveShowPoster(match.posterUrl, [], show.folderPath, { force: true });
+      if (saved) {
+        show.posterUrl = posterUrlForPath(saved);
+      }
+      await delay(400);
+    } catch {
+      // Keep going through remaining shows.
+    }
+  }
+
+  return library;
+}
+
+ipcMain.handle("get-downloaded-movies", async (_event, options = {}) => {
   const nas = loadNasConfig();
   prepareNasAccess(nas.videoFolder);
-  return listDownloadedMovies({
+  const library = listDownloadedMovies({
     localDir: outputDirectory(),
     nasDir: nas.videoFolder
   });
+  if (options?.backfillPosters) {
+    try {
+      await backfillOfficialShowPosters(library);
+    } catch {
+      // Library listing should still succeed without poster backfill.
+    }
+  }
+  return library;
 });
 
 ipcMain.handle("open-downloaded-movie", async (_event, filePath) => {

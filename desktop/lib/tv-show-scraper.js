@@ -187,6 +187,24 @@ function buildTvShowScraperScript() {
       "TV Show";
     const showTitle = baseTitle.replace(/\\s*[-–]\\s*season\\s*\\d+.*$/i, "").trim() || baseTitle;
 
+    const posterCandidates = [
+      document.querySelector('meta[property="og:image"]')?.content,
+      document.querySelector('meta[name="twitter:image"]')?.content,
+      document.querySelector(".film-poster img, .movie-poster img, .poster img, img.poster")?.currentSrc,
+      document.querySelector(".film-poster img, .movie-poster img, .poster img, img.poster")?.src,
+      document.querySelector(".poster[data-img]")?.getAttribute("data-img")
+    ];
+    let posterUrl = "";
+    for (const raw of posterCandidates) {
+      try {
+        if (!raw || String(raw).startsWith("data:")) continue;
+        posterUrl = new URL(String(raw), window.location.href).href;
+        if (posterUrl) break;
+      } catch {
+        // try next
+      }
+    }
+
     const rawEpisodes = collectEpisodeLinks(activeSeason);
     const episodeList = normalizeEpisodeNumbers(rawEpisodes, activeSeason);
 
@@ -196,6 +214,7 @@ function buildTvShowScraperScript() {
       showTitle,
       season: activeSeason,
       showUrl: pageUrl,
+      posterUrl: posterUrl || undefined,
       episodeCount: episodeList.length,
       episodes: episodeList,
       notes: [

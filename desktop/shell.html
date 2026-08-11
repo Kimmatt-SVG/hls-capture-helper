@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Movie Stream Downloader</title>
     <link rel="stylesheet" href="shell.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet" />
     <script src="vendor/anime.umd.min.js"></script>
     <script src="shell-motion.js"></script>
   </head>
@@ -20,21 +23,18 @@
         <div class="brand">
           <strong id="brand-title">Movie Stream Downloader</strong>
           <span id="stream-status" class="muted">Waiting for stream...</span>
-          <div class="status-badges">
-            <span id="adblock-status" class="status-badge">Ad blocker active</span>
-            <span id="redirect-status" class="status-badge">Redirect protection on</span>
-          </div>
         </div>
 
         <form id="toolbar-search-form" class="toolbar-search" autocomplete="off">
           <input
             id="toolbar-search-input"
             type="search"
-            placeholder="Search movies (e.g. avengers endgame)"
-            aria-label="Search movies"
+            placeholder="Search movies & TV"
+            aria-label="Search movies and TV"
           />
           <button type="submit" class="primary">Search</button>
         </form>
+        <button id="open-library" type="button" class="secondary" title="Browse downloaded movies and TV">Library</button>
       </div>
 
       <div class="actions">
@@ -43,15 +43,10 @@
           <button id="go-forward" type="button" class="nav secondary" title="Forward" disabled aria-label="Forward">→</button>
         </div>
         <button id="reload-site" type="button" class="secondary" title="Reload the current page">Reload Page</button>
-        <button id="refresh-detect" type="button" class="secondary" title="Refresh stream detection">Refresh Stream</button>
-        <button id="stream-debug" type="button" class="secondary" title="Show captured streams and ffprobe results">Stream Debug</button>
         <button id="open-anime-window" type="button" class="secondary" title="Open a separate window for anime">Anime Window</button>
         <button id="open-folder" type="button" class="secondary">Open Movies Folder</button>
         <button id="connect-nas" type="button" class="secondary" title="Sign in to NAS share">Connect NAS</button>
         <button id="connect-site" type="button" class="secondary" title="Save Tornado Movies login">Site Login</button>
-        <button id="sync-to-nas" type="button" class="secondary" title="Copy all PC movies to NAS (skip existing)">Sync to NAS</button>
-        <button id="save-nas" type="button" class="accent">Save to NAS</button>
-        <button id="download" type="button" class="primary">Download MP4</button>
         <button id="stop-download" type="button" class="danger" hidden>Stop</button>
       </div>
     </header>
@@ -63,67 +58,85 @@
 
     <section id="search-panel" class="search-panel">
       <div id="catalog-home" class="catalog-home">
-        <div class="search-card catalog-home-hero">
-          <div class="catalog-home-hero-copy">
-            <p class="catalog-brand" id="catalog-brand">Movie Stream Downloader</p>
-            <h1 id="landing-title">What do you want to watch?</h1>
-            <p id="landing-lead" class="search-lead">
-              Search the catalog, then save titles to your PC or NAS.
-            </p>
-          </div>
-          <ul class="search-features" id="search-features" hidden>
-            <li>Custom catalog search — no website browsing</li>
-            <li>Direct download when available, with poster art</li>
-            <li>Queue movies for PC or NAS</li>
-          </ul>
-          <form id="search-form" class="search-form catalog-home-search" autocomplete="off">
-            <input
-              id="search-input"
-              type="search"
-              placeholder="e.g. inception, avengers endgame"
-              aria-label="Search movies"
-            />
-            <button type="submit" class="primary">Search</button>
-          </form>
-          <button id="browse-home" type="button" class="secondary browse-home" hidden>Browse Tornado Movies</button>
-          <p id="search-error" class="search-error"></p>
+        <p id="search-error" class="search-error home-search-error" role="status"></p>
+        <button id="browse-home" type="button" class="secondary browse-home" hidden>Browse Tornado Movies</button>
+
+        <div id="home-panels" class="home-panels">
+          <section id="download-queue-section" class="home-panel download-queue-section home-queue" aria-label="Download queue">
+            <div class="download-queue-head home-queue-header">
+              <div>
+                <strong>Download Queue</strong>
+                <span id="download-queue-summary" class="download-queue-summary">0 items queued</span>
+              </div>
+            </div>
+
+            <div class="queue-tools">
+              <div class="queue-tools-label">Add to queue</div>
+              <div class="download-queue-actions home-queue-actions">
+                <button id="add-search-to-queue" type="button" class="secondary" title="Add all movies from the current catalog search">
+                  Add Search Movies
+                </button>
+                <button id="add-current-to-queue" type="button" class="secondary" title="Add the selected catalog movie to the queue">
+                  Add Current Movie
+                </button>
+                <button id="browse-site-for-tv" type="button" class="secondary">Browse Site for TV</button>
+                <button id="back-to-catalog" type="button" class="secondary" hidden>Back to Catalog</button>
+                <button id="scan-tv-show" type="button" class="secondary">Scan Season</button>
+                <button id="add-tv-to-queue" type="button" class="primary" disabled>Add Scanned Episodes</button>
+                <button id="clear-tv-show-plan" type="button" class="secondary">Clear Scan</button>
+              </div>
+              <p id="tv-show-summary" class="tv-show-summary queue-scan-summary">Browse a season page, scan it, then add episodes here with movies.</p>
+              <ul id="tv-show-episode-list" class="tv-show-episode-list queue-scan-list" hidden>
+                <li class="tv-show-empty">No season scanned yet.</li>
+              </ul>
+            </div>
+
+            <div class="queue-run-bar">
+              <button id="start-download-queue-local" type="button" class="primary">Queue → PC</button>
+              <button id="start-download-queue-nas" type="button" class="accent">Queue → NAS</button>
+              <button id="stop-download-queue" type="button" class="danger" hidden>Stop Queue</button>
+              <button id="clear-download-queue" type="button" class="secondary">Clear Queue</button>
+              <button id="queue-debug-copy" type="button" class="secondary" title="Copy queue debug log">Debug</button>
+            </div>
+
+            <ul id="download-queue-list" class="download-queue-list home-queue-list">
+              <li class="download-queue-empty">One queue for movies and TV episodes. Add titles above, then run Queue → PC or NAS.</li>
+            </ul>
+          </section>
+
+          <section id="tv-show-section" class="home-panel tv-show-section" aria-label="TV shows" hidden>
+            <strong id="tv-show-title" hidden>TV Shows</strong>
+            <p id="tv-show-lead" class="tv-show-lead" hidden></p>
+          </section>
+
+          <section class="home-panel activity-log-section activity-log-section-fill" aria-label="Activity log">
+            <div class="activity-log-head">
+              <div>
+                <strong>Activity Log</strong>
+                <span class="activity-log-hint">Errors and stream debug stay here</span>
+              </div>
+              <div class="activity-log-actions">
+                <button id="activity-log-copy" type="button" class="library-refresh" title="Copy log">⎘</button>
+                <button id="activity-log-clear" type="button" class="library-refresh" title="Clear log">×</button>
+              </div>
+            </div>
+            <div id="activity-log" class="activity-log" aria-live="polite">
+              <p class="activity-log-empty">Download and stream events will appear here.</p>
+            </div>
+          </section>
         </div>
+      </div>
 
-        <section id="download-queue-section" class="download-queue-section home-queue" aria-label="Download queue">
-          <div class="download-queue-head home-queue-header">
-            <div>
-              <strong>Download Queue</strong>
-              <span id="download-queue-summary" class="download-queue-summary">0 movies queued</span>
-            </div>
+      <div id="catalog-library" class="catalog-library" hidden>
+        <div class="catalog-library-head">
+          <div class="catalog-library-brand">
+            <button id="catalog-back-library-home" type="button" class="secondary catalog-back">← Home</button>
+            <h2>My Library</h2>
+            <p id="library-summary" class="library-summary catalog-library-summary">Scanning...</p>
           </div>
-          <div class="download-queue-actions home-queue-actions">
-            <button id="add-search-to-queue" type="button" class="secondary" title="Add all movies from the current catalog search">
-              Add Search Results
-            </button>
-            <button id="add-current-to-queue" type="button" class="secondary" title="Add the selected catalog movie to the queue">
-              Add Current Movie
-            </button>
-            <button id="start-download-queue-local" type="button" class="primary">Queue → PC</button>
-            <button id="start-download-queue-nas" type="button" class="accent">Queue → NAS</button>
-            <button id="stop-download-queue" type="button" class="danger" hidden>Stop Queue</button>
-            <button id="clear-download-queue" type="button" class="secondary">Clear</button>
-            <button id="queue-debug-copy" type="button" class="secondary" title="Copy queue debug log">Queue Debug</button>
-          </div>
-          <ul id="download-queue-list" class="download-queue-list home-queue-list">
-            <li class="download-queue-empty">Search the catalog and add titles here. Each download gets a fresh link right before it starts.</li>
-          </ul>
-        </section>
-
-        <section id="home-library" class="home-library" aria-label="Downloaded movies">
-          <div class="library-header home-library-header">
-            <div>
-              <strong>Downloads</strong>
-              <span id="library-summary" class="library-summary">Scanning...</span>
-            </div>
-            <button id="refresh-library" type="button" class="library-refresh" title="Refresh list">↻</button>
-          </div>
-          <div id="library-sections" class="library-sections home-library-sections"></div>
-        </section>
+          <button id="refresh-library" type="button" class="secondary" title="Refresh list">Refresh</button>
+        </div>
+        <div id="library-sections" class="library-sections catalog-library-sections"></div>
       </div>
 
       <div id="catalog-results" class="catalog-results" hidden>
@@ -250,56 +263,6 @@
           <button id="site-connect-save" type="submit" class="accent">Save &amp; Login</button>
         </div>
       </form>
-    </aside>
-
-    <aside id="library-sidebar" class="library-sidebar" aria-label="Activity log and downloads">
-      <div id="mode-tabs" class="mode-tabs" role="tablist" aria-label="Download mode">
-        <button id="mode-tab-movies" type="button" class="mode-tab active" data-mode="movies" role="tab" aria-selected="true">
-          Movies
-        </button>
-        <button id="mode-tab-tv" type="button" class="mode-tab" data-mode="tv" role="tab" aria-selected="false">
-          TV Shows
-        </button>
-      </div>
-
-      <section id="tv-show-section" class="tv-show-section" hidden>
-        <div class="tv-show-head">
-          <div>
-            <strong id="tv-show-title">TV Show Mode</strong>
-            <span class="tv-show-badge">Prototype</span>
-            <span id="tv-show-summary" class="tv-show-summary">Open a season page, then scan it</span>
-          </div>
-        </div>
-        <p class="tv-show-lead">
-          Open an Aniwave series page, scan its episodes, then download each one. English dub is tried first when available.
-        </p>
-        <div class="tv-show-actions">
-          <button id="scan-tv-show" type="button" class="secondary">Scan Current Season</button>
-          <button id="start-tv-show-local" type="button" class="primary" disabled>Download Episodes → PC</button>
-          <button id="start-tv-show-nas" type="button" class="accent" disabled>Download Episodes → NAS</button>
-          <button id="stop-tv-show" type="button" class="danger" hidden>Stop TV Download</button>
-          <button id="clear-tv-show-plan" type="button" class="secondary">Clear Plan</button>
-        </div>
-        <ul id="tv-show-episode-list" class="tv-show-episode-list">
-          <li class="tv-show-empty">No TV show scanned yet.</li>
-        </ul>
-      </section>
-
-      <section class="activity-log-section activity-log-section-fill">
-        <div class="activity-log-head">
-          <div>
-            <strong>Activity Log</strong>
-            <span class="activity-log-hint">Errors and stream debug stay here</span>
-          </div>
-          <div class="activity-log-actions">
-            <button id="activity-log-copy" type="button" class="library-refresh" title="Copy log">⎘</button>
-            <button id="activity-log-clear" type="button" class="library-refresh" title="Clear log">×</button>
-          </div>
-        </div>
-        <div id="activity-log" class="activity-log" aria-live="polite">
-          <p class="activity-log-empty">Download and stream events will appear here.</p>
-        </div>
-      </section>
     </aside>
 
     <script src="shell.js"></script>

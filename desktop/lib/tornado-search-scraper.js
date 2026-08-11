@@ -1,7 +1,8 @@
 function buildTornadoSearchScraperScript() {
   return `
 (() => {
-  if (window.__tornadoSearchScraperInstalled) return;
+  if (window.__tornadoSearchScraperInstalledV2) return;
+  window.__tornadoSearchScraperInstalledV2 = true;
   window.__tornadoSearchScraperInstalled = true;
 
   const normalize = (url) => {
@@ -14,21 +15,38 @@ function buildTornadoSearchScraperScript() {
     }
   };
 
-  const canonical = (url) => {
+  const classify = (url) => {
     try {
       const parsed = new URL(url, window.location.href);
-      const match = parsed.pathname.match(/\\/movie\\/([^/]+)\\/([^/]+)/i);
-      if (!match) return "";
-      return parsed.origin + "/movie/" + match[1] + "/" + match[2];
+      const pathname = parsed.pathname || "";
+      const movieMatch = pathname.match(/\\/movie\\/([^/]+)\\/([^/]+)/i);
+      if (movieMatch) {
+        return {
+          kind: "movie",
+          canonical: parsed.origin + "/movie/" + movieMatch[1] + "/" + movieMatch[2]
+        };
+      }
+      const tvMatch = pathname.match(/\\/(?:tv-series|tv|serie|series)\\/([^/]+)\\/([^/]+)/i);
+      if (tvMatch) {
+        const segments = pathname.replace(/\\/+$/, "").split("/").filter(Boolean);
+        const keep = segments.slice(0, Math.min(segments.length, 4));
+        return {
+          kind: "tv",
+          canonical: parsed.origin + "/" + keep.join("/")
+        };
+      }
+      return null;
     } catch {
-      return "";
+      return null;
     }
   };
 
-  const titleFromUrl = (url) => {
-    const match = String(url).match(/\\/movie\\/([^/]+)\\//i);
-    if (!match) return "Movie";
-    return match[1]
+  const titleFromUrl = (url, kind) => {
+    const movieMatch = String(url).match(/\\/movie\\/([^/]+)\\//i);
+    const tvMatch = String(url).match(/\\/(?:tv-series|tv|serie|series)\\/([^/]+)\\//i);
+    const slug = (movieMatch || tvMatch)?.[1];
+    if (!slug) return kind === "tv" ? "TV Show" : "Movie";
+    return slug
       .replace(/-/g, " ")
       .replace(/\\b\\w/g, (char) => char.toUpperCase());
   };
@@ -83,32 +101,42 @@ function buildTornadoSearchScraperScript() {
 
   window.__tornadoScrapeSearchMovies = () => {
     const found = new Map();
+    const anchors = document.querySelectorAll(
+      "a[href*='/movie/'], a[href*='/tv-series/'], a[href*='/tv/'], a[href*='/serie/'], a[href*='/series/']"
+    );
 
-    for (const element of document.querySelectorAll("a[href*='/movie/']")) {
+    for (const element of anchors) {
       const rawHref = element.href || element.getAttribute("href") || "";
-      const href = canonical(rawHref) || normalize(rawHref);
-      if (!href || !/\\/movie\\/[^/]+\\/[^/?#]+/i.test(href)) continue;
+      const classified = classify(rawHref);
+      if (!classified?.canonical) continue;
+      const href = classified.canonical;
+      const kind = classified.kind;
+
+      if (kind === "movie" && !/\\/movie\\/[^/]+\\/[^/?#]+/i.test(href)) continue;
+      if (kind === "tv" && !/\\/(?:tv-series|tv|serie|series)\\/[^/]+\\/[^/?#]+/i.test(href)) continue;
 
       const card =
         element.closest(
-          ".poster, article, .item, .flw-item, .film-poster, .movie-item, .card, li, .col, .grid-item, .movie"
+          ".poster, article, .item, .flw-item, .film-poster, .movie-item, .card, li, .col, .grid-item, .movie, .tv, .series"
         ) || element.parentElement;
       const dataName = cleanTitle(card?.getAttribute?.("data-name") || "");
       const text = cleanTitle(element.textContent || "");
       const titleAttr = cleanTitle(element.getAttribute("title") || element.getAttribute("aria-label") || "");
       const imgAlt = cleanTitle(card?.querySelector?.("img")?.alt || "");
+      const fallbackTitle = titleFromUrl(href, kind);
       const title =
         (dataName && dataName.length < 120 ? dataName : "") ||
         (text && text.length < 80 ? text : "") ||
         (titleAttr && titleAttr.length < 100 ? titleAttr : "") ||
         (imgAlt && imgAlt.length < 100 ? imgAlt : "") ||
-        titleFromUrl(href);
+        fallbackTitle;
       const posterUrl = pickPoster(element) || pickPoster(card);
       const year = yearFromText(card?.getAttribute?.("data-name") || card?.textContent || text || titleAttr);
 
       const existing = found.get(href);
       if (!existing) {
         found.set(href, {
+          kind,
           movieUrl: href,
           title,
           posterUrl: posterUrl || undefined,
@@ -120,34 +148,46 @@ function buildTornadoSearchScraperScript() {
       if ((!existing.posterUrl || existing.posterUrl.length < 8) && posterUrl) {
         existing.posterUrl = posterUrl;
       }
-      if ((!existing.title || existing.title === titleFromUrl(href)) && title && title !== titleFromUrl(href)) {
+      if ((!existing.title || existing.title === fallbackTitle) && title && title !== fallbackTitle) {
         existing.title = title;
       }
       if (!existing.year && year) existing.year = year;
+      if (!existing.kind) existing.kind = kind;
     }
 
+    const movies = [...found.values()];
     return {
       ok: true,
-      movies: [...found.values()]
+      movies,
+      counts: {
+        total: movies.length,
+        movies: movies.filter((item) => item.kind !== "tv").length,
+        tv: movies.filter((item) => item.kind === "tv").length
+      }
     };
   };
 
   window.__tornadoScrapeMovieDetail = () => {
-    const href = canonical(location.href) || normalize(location.href);
-    if (!href || !/\\/movie\\//i.test(href)) {
-      return { ok: false, error: "Not on a movie page." };
+    const classified = classify(location.href);
+    const href = classified?.canonical || normalize(location.href);
+    if (!href || !classified) {
+      return { ok: false, error: "Not on a movie or TV page." };
     }
 
-    const pathMatch = location.pathname.match(/\\/movie\\/([^/]+)\\/([^/]+)/i);
+    const kind = classified.kind;
+    const pathMatch =
+      kind === "movie"
+        ? location.pathname.match(/\\/movie\\/([^/]+)\\/([^/]+)/i)
+        : location.pathname.match(/\\/(?:tv-series|tv|serie|series)\\/([^/]+)\\/([^/]+)/i);
     const slug = pathMatch?.[1] || "";
-    const movieId = pathMatch?.[2] || "";
+    const contentId = pathMatch?.[2] || "";
 
     const matchingPoster =
-      (movieId && document.querySelector('.poster[data-id="' + movieId + '"]')) ||
+      (contentId && document.querySelector('.poster[data-id="' + contentId + '"]')) ||
       (slug &&
         [...document.querySelectorAll(".poster[data-href], .poster[data-name]")].find((node) => {
           const dataHref = String(node.getAttribute("data-href") || "");
-          return dataHref.includes("/movie/" + slug + "/");
+          return dataHref.includes("/" + slug + "/");
         })) ||
       null;
 
@@ -156,7 +196,7 @@ function buildTornadoSearchScraperScript() {
         document.querySelector('meta[property="og:title"]')?.content ||
         document.querySelector("h1")?.textContent ||
         document.title ||
-        titleFromUrl(href)
+        titleFromUrl(href, kind)
     );
 
     const posterCandidates = [
@@ -183,8 +223,9 @@ function buildTornadoSearchScraperScript() {
     return {
       ok: true,
       movie: {
+        kind,
         movieUrl: href,
-        title: title || titleFromUrl(href),
+        title: title || titleFromUrl(href, kind),
         posterUrl: posterUrl || undefined,
         year: year || undefined
       }

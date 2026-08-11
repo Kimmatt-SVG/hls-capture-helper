@@ -160,7 +160,25 @@ async function saveArtworkForPage(webContents, requestHeaders, videoOutputPath) 
   return primaryPosterPath;
 }
 
+async function saveShowPoster(posterUrl, requestHeaders, showFolder, options = {}) {
+  if (!posterUrl || !showFolder) return null;
+  fs.mkdirSync(showFolder, { recursive: true });
+  const outputPath = path.join(showFolder, "poster.jpg");
+  const force = Boolean(options.force);
+  try {
+    if (!force && fs.existsSync(outputPath) && fs.statSync(outputPath).size > 8 * 1024) {
+      return outputPath;
+    }
+  } catch {
+    // Continue and rewrite.
+  }
+  await downloadArtwork(posterUrl, requestHeaders, outputPath);
+  return outputPath;
+}
+
 module.exports = {
   extractArtworkUrl,
-  saveArtworkForPage
+  saveArtworkForPage,
+  downloadArtwork,
+  saveShowPoster
 };

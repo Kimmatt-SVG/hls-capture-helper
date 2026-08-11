@@ -52,38 +52,30 @@
     if (!ready() || !root) return;
     const level = motionLevel();
     const hero = root.querySelector(".catalog-home-hero") || root;
-    const queue = root.querySelector(".home-queue");
-    const library = root.querySelector(".home-library");
+    const panels = root.querySelectorAll(".home-panel");
     freeze(hero, { opacity: 0, y: level === "full" ? 14 : 0 });
-    if (queue) freeze(queue, { opacity: 0, y: level === "full" ? 16 : 0 });
-    if (library) freeze(library, { opacity: 0, y: level === "full" ? 18 : 0 });
+    if (panels.length) freeze(panels, { opacity: 0, y: level === "full" ? 16 : 0 });
     api.animate(hero, {
       opacity: 1,
       y: 0,
-      duration: level === "full" ? 480 : 180,
+      duration: level === "full" ? 420 : 160,
       ease: "outCubic",
       onComplete: () => clearInline(hero)
     });
-    if (queue) {
-      api.animate(queue, {
+    if (panels.length) {
+      api.animate(panels, {
         opacity: 1,
         y: 0,
-        duration: level === "full" ? 480 : 180,
-        delay: level === "full" ? 90 : 0,
+        duration: level === "full" ? 460 : 160,
+        delay: level === "full" ? api.stagger(40, { start: 80 }) : 0,
         ease: "outCubic",
-        onComplete: () => clearInline(queue)
+        onComplete: () => clearInline(panels)
       });
     }
-    if (library) {
-      api.animate(library, {
-        opacity: 1,
-        y: 0,
-        duration: level === "full" ? 520 : 180,
-        delay: level === "full" ? 160 : 0,
-        ease: "outCubic",
-        onComplete: () => clearInline(library)
-      });
-    }
+    setTimeout(() => {
+      clearInline(hero);
+      clearInline(panels);
+    }, level === "full" ? 900 : 350);
   }
 
   function animateCatalogGrid(cards) {

@@ -18,6 +18,7 @@ function mediaServerPosterPath(videoPath, extension = ".jpg") {
 
 function findPosterForVideo(videoPath) {
   const base = videoPath.replace(VIDEO_EXT_PATTERN, "");
+  const dir = path.dirname(videoPath);
   const candidates = [
     `${base}-poster.jpg`,
     `${base}-poster.jpeg`,
@@ -26,7 +27,12 @@ function findPosterForVideo(videoPath) {
     `${base}.jpg`,
     `${base}.jpeg`,
     `${base}.png`,
-    `${base}.webp`
+    `${base}.webp`,
+    path.join(dir, "poster.jpg"),
+    path.join(dir, "poster.jpeg"),
+    path.join(dir, "poster.png"),
+    path.join(dir, "folder.jpg"),
+    path.join(dir, "cover.jpg")
   ];
 
   for (const candidate of candidates) {
@@ -207,6 +213,78 @@ function embedPosterInVideoAsync(ffmpegPath, videoPath, posterPath, options = {}
   });
 }
 
+function extractVideoPoster(ffmpegPath, videoPath, outputPath, options = {}) {
+  if (!ffmpegPath || !videoPath || !outputPath) {
+    return { ok: false, error: "Missing ffmpeg or paths." };
+  }
+  if (!fs.existsSync(videoPath)) {
+    return { ok: false, error: "Video not found." };
+  }
+
+  try {
+    if (fs.existsSync(outputPath) && fs.statSync(outputPath).isFile() && fs.statSync(outputPath).size > 1024) {
+      return { ok: true, path: outputPath, cached: true };
+    }
+  } catch {
+    // Continue and regenerate.
+  }
+
+  const seekSeconds = Number.isFinite(options.seekSeconds) ? options.seekSeconds : 8;
+  const width = Number.isFinite(options.width) ? options.width : 400;
+  const tempPath = `${outputPath}.tmp.jpg`;
+
+  try {
+    if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
+  } catch {
+    // Best effort.
+  }
+
+  const result = spawnSync(
+    ffmpegPath,
+    [
+      "-hide_banner",
+      "-loglevel",
+      "error",
+      "-ss",
+      String(Math.max(0, seekSeconds)),
+      "-i",
+      videoPath,
+      "-frames:v",
+      "1",
+      "-vf",
+      `scale=${width}:-2`,
+      "-q:v",
+      "4",
+      "-y",
+      tempPath
+    ],
+    { encoding: "utf8", windowsHide: true, timeout: 45000 }
+  );
+
+  if (result.status !== 0 || !fs.existsSync(tempPath)) {
+    try {
+      if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
+    } catch {
+      // Ignore.
+    }
+    return { ok: false, error: result.stderr?.trim() || "Could not extract poster frame." };
+  }
+
+  try {
+    fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+    fs.renameSync(tempPath, outputPath);
+  } catch (error) {
+    try {
+      fs.copyFileSync(tempPath, outputPath);
+      fs.unlinkSync(tempPath);
+    } catch (copyError) {
+      return { ok: false, error: copyError.message || error.message };
+    }
+  }
+
+  return { ok: true, path: outputPath, cached: false };
+}
+
 module.exports = {
   videoBasename,
   posterPathForVideo,
@@ -214,5 +292,6 @@ module.exports = {
   findPosterForVideo,
   relatedPosterFiles,
   embedPosterInVideo,
-  embedPosterInVideoAsync
+  embedPosterInVideoAsync,
+  extractVideoPoster
 };

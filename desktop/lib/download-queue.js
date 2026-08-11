@@ -3,6 +3,7 @@ const {
   extractMovieIdFromUrl,
   normalizeMovieUrl
 } = require("./movie-url-utils");
+const { episodeFileLabel, canonicalContentUrl } = require("./tv-url-utils");
 
 function titleFromMovieUrl(url) {
   try {
@@ -14,6 +15,10 @@ function titleFromMovieUrl(url) {
   } catch {
     return "Movie";
   }
+}
+
+function normalizePageUrl(url) {
+  return canonicalContentUrl(url) || normalizeMovieUrl(url) || String(url || "").trim();
 }
 
 class DownloadQueue {
@@ -32,6 +37,8 @@ class DownloadQueue {
     const pending = this.items.filter((item) => item.status === "pending").length;
     const done = this.items.filter((item) => item.status === "done").length;
     const failed = this.items.filter((item) => item.status === "failed").length;
+    const movies = this.items.filter((item) => item.kind !== "episode").length;
+    const episodes = this.items.filter((item) => item.kind === "episode").length;
 
     return {
       running: this.running,
@@ -42,7 +49,9 @@ class DownloadQueue {
         total: this.items.length,
         pending,
         done,
-        failed
+        failed,
+        movies,
+        episodes
       }
     };
   }
@@ -56,12 +65,13 @@ class DownloadQueue {
       };
     }
 
-    if (this.items.some((item) => item.movieUrl === normalizedUrl && item.status === "pending")) {
+    if (this.items.some((item) => item.kind !== "episode" && item.movieUrl === normalizedUrl && item.status === "pending")) {
       return { ok: false, error: "Movie is already in the queue." };
     }
 
     const item = {
       id: `q-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
+      kind: "movie",
       title: options.title || titleFromMovieUrl(normalizedUrl),
       movieUrl: normalizedUrl,
       destination: options.destination === "nas" ? "nas" : "local",
@@ -72,6 +82,63 @@ class DownloadQueue {
 
     this.items.push(item);
     return { ok: true, item };
+  }
+
+  addEpisode(episode = {}, options = {}) {
+    const pageUrl = normalizePageUrl(episode.url || episode.movieUrl || "");
+    if (!pageUrl) {
+      return { ok: false, error: "Episode is missing a URL." };
+    }
+
+    const season = Number(episode.season) || 1;
+    const episodeNumber = Number(episode.episode) || 0;
+    const showTitle = String(options.showTitle || episode.showTitle || "TV Show").trim() || "TV Show";
+    const label = episodeFileLabel(season, episodeNumber || 1);
+    const episodeTitle = String(episode.title || "Episode").trim() || "Episode";
+    const title = `${showTitle} · ${label} · ${episodeTitle}`;
+
+    if (
+      this.items.some(
+        (item) =>
+          item.kind === "episode" &&
+          item.movieUrl === pageUrl &&
+          item.status === "pending"
+      )
+    ) {
+      return { ok: false, error: "Episode is already in the queue." };
+    }
+
+    const item = {
+      id: `q-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
+      kind: "episode",
+      title,
+      movieUrl: pageUrl,
+      showTitle,
+      season,
+      episode: episodeNumber,
+      episodeTitle,
+      posterUrl: options.posterUrl || episode.posterUrl || null,
+      destination: options.destination === "nas" ? "nas" : "local",
+      status: "pending",
+      error: null,
+      addedAt: Date.now()
+    };
+
+    this.items.push(item);
+    return { ok: true, item };
+  }
+
+  addEpisodes(episodes = [], options = {}) {
+    const added = [];
+    const skipped = [];
+
+    for (const episode of episodes) {
+      const result = this.addEpisode(episode, options);
+      if (result.ok) added.push(result.item);
+      else skipped.push({ url: episode?.url, error: result.error });
+    }
+
+    return { ok: true, added, skipped };
   }
 
   addMany(entries = [], destination = "local") {
@@ -91,7 +158,7 @@ class DownloadQueue {
 
   remove(id) {
     if (this.running && this.currentId === id) {
-      return { ok: false, error: "Cannot remove the movie that is downloading." };
+      return { ok: false, error: "Cannot remove the item that is downloading." };
     }
 
     const before = this.items.length;

@@ -38,18 +38,23 @@ const warpDownloadLink = document.getElementById("warp-download-link");
 const adblockStatus = document.getElementById("adblock-status");
 const redirectStatus = document.getElementById("redirect-status");
 const searchPanel = document.getElementById("search-panel");
-const searchForm = document.getElementById("search-form");
-const searchInput = document.getElementById("search-input");
 const searchError = document.getElementById("search-error");
 const browseHomeButton = document.getElementById("browse-home");
 const catalogHome = document.getElementById("catalog-home");
+const catalogLibrary = document.getElementById("catalog-library");
 const catalogResults = document.getElementById("catalog-results");
 const catalogDetail = document.getElementById("catalog-detail");
 const catalogGrid = document.getElementById("catalog-grid");
 const catalogResultsTitle = document.getElementById("catalog-results-title");
 const catalogResultsSummary = document.getElementById("catalog-results-summary");
 const catalogBackHome = document.getElementById("catalog-back-home");
+const catalogBackLibraryHome = document.getElementById("catalog-back-library-home");
 const catalogBackResults = document.getElementById("catalog-back-results");
+const openLibraryButton = document.getElementById("open-library");
+
+function setToolbarDisabled(button, disabled) {
+  if (button) button.disabled = disabled;
+}
 const catalogQueueAll = document.getElementById("catalog-queue-all");
 const catalogDetailPoster = document.getElementById("catalog-detail-poster");
 const catalogDetailTitle = document.getElementById("catalog-detail-title");
@@ -84,22 +89,18 @@ const startDownloadQueueNasButton = document.getElementById("start-download-queu
 const stopDownloadQueueButton = document.getElementById("stop-download-queue");
 const clearDownloadQueueButton = document.getElementById("clear-download-queue");
 const queueDebugCopyButton = document.getElementById("queue-debug-copy");
-const modeTabs = document.getElementById("mode-tabs");
 const searchFeatures = document.getElementById("search-features");
-const tvShowLead = document.querySelector(".tv-show-lead");
+const tvShowLead = document.getElementById("tv-show-lead");
 const tvShowTitle = document.getElementById("tv-show-title");
-const tvShowBadge = document.querySelector(".tv-show-badge");
-const modeTabMovies = document.getElementById("mode-tab-movies");
-const modeTabTv = document.getElementById("mode-tab-tv");
 const downloadQueueSection = document.getElementById("download-queue-section");
 const tvShowSection = document.getElementById("tv-show-section");
 const tvShowSummary = document.getElementById("tv-show-summary");
 const tvShowEpisodeList = document.getElementById("tv-show-episode-list");
 const scanTvShowButton = document.getElementById("scan-tv-show");
-const startTvShowLocalButton = document.getElementById("start-tv-show-local");
-const startTvShowNasButton = document.getElementById("start-tv-show-nas");
-const stopTvShowButton = document.getElementById("stop-tv-show");
+const addTvToQueueButton = document.getElementById("add-tv-to-queue");
 const clearTvShowPlanButton = document.getElementById("clear-tv-show-plan");
+const browseSiteForTvButton = document.getElementById("browse-site-for-tv");
+const backToCatalogButton = document.getElementById("back-to-catalog");
 
 const PROGRESS_DOCK_HEIGHT = 88;
 const MAX_LOG_ENTRIES = 120;
@@ -111,7 +112,7 @@ let librarySyncActive = false;
 let queueActive = false;
 let tvShowActive = false;
 let tvShowPlan = null;
-let sidebarMode = "movies";
+let siteBrowseMode = false;
 let hideMovieDownloader = false;
 let catalogMode = false;
 let catalogMovies = [];
@@ -215,7 +216,11 @@ async function refreshStreamDebug() {
 function showSearchPanel() {
   searchPanel.hidden = false;
   if (catalogMode) {
-    showCatalogView(catalogView === "detail" || catalogView === "results" ? catalogView : "home");
+    const keep =
+      catalogView === "detail" || catalogView === "results" || catalogView === "library"
+        ? catalogView
+        : "home";
+    showCatalogView(keep);
     streamStatus.textContent =
       catalogView === "home" ? "Search the catalog to begin." : streamStatus.textContent;
   } else {
@@ -223,7 +228,7 @@ function showSearchPanel() {
       ? "Search for an anime series on Aniwave."
       : "Search for a movie to begin.";
   }
-  searchInput.focus();
+  toolbarSearchInput?.focus();
 }
 
 function hideSearchPanel() {
@@ -236,9 +241,14 @@ function showCatalogView(view) {
   if (!catalogMode) return;
   const previous = catalogView;
   catalogView = view;
+  siteBrowseMode = false;
   searchPanel.hidden = false;
   searchPanel.classList.add("catalog-mode");
+  searchPanel.classList.remove("site-browse-mode");
+  if (browseSiteForTvButton) browseSiteForTvButton.hidden = false;
+  if (backToCatalogButton) backToCatalogButton.hidden = true;
   if (catalogHome) catalogHome.hidden = view !== "home";
+  if (catalogLibrary) catalogLibrary.hidden = view !== "library";
   if (catalogResults) catalogResults.hidden = view !== "results";
   if (catalogDetail) catalogDetail.hidden = view !== "detail";
   reportChromeLayout();
@@ -246,6 +256,9 @@ function showCatalogView(view) {
   if (view === "home" && catalogHome && (previous !== "home" || !catalogHomeAnimated)) {
     catalogHomeAnimated = true;
     window.shellMotion?.animateCatalogHome(catalogHome);
+  }
+  if (view === "library") {
+    refreshLibrary(true);
   }
 }
 
@@ -272,7 +285,11 @@ function renderCatalogPoster(container, movie, className) {
   container.appendChild(fallback);
 }
 
-function renderCatalogGrid(movies, query) {
+function isCatalogTvItem(item) {
+  return item?.kind === "tv" || /\/(?:tv-series|tv|serie|series)\//i.test(String(item?.movieUrl || ""));
+}
+
+function renderCatalogGrid(movies, query, counts = null) {
   catalogMovies = Array.isArray(movies) ? movies : [];
   if (!catalogGrid) return;
   catalogGrid.innerHTML = "";
@@ -281,23 +298,30 @@ function renderCatalogGrid(movies, query) {
     catalogResultsTitle.textContent = query ? `Results for “${query}”` : "Results";
   }
   if (catalogResultsSummary) {
-    const count = catalogMovies.length;
-    catalogResultsSummary.textContent = `${count} title${count === 1 ? "" : "s"}`;
+    const total = catalogMovies.length;
+    const movieCount = counts?.movies ?? catalogMovies.filter((item) => !isCatalogTvItem(item)).length;
+    const tvCount = counts?.tv ?? catalogMovies.filter((item) => isCatalogTvItem(item)).length;
+    catalogResultsSummary.textContent = `${total} title${total === 1 ? "" : "s"} · ${movieCount} movie${movieCount === 1 ? "" : "s"} · ${tvCount} TV`;
   }
 
   for (const movie of catalogMovies) {
     const card = document.createElement("button");
     card.type = "button";
-    card.className = "catalog-card";
+    card.className = `catalog-card${isCatalogTvItem(movie) ? " kind-tv" : " kind-movie"}`;
     card.setAttribute("role", "listitem");
 
     const poster = document.createElement("div");
     poster.className = "catalog-card-poster";
     renderCatalogPoster(poster, movie, "catalog-card-poster-fallback");
 
+    const badge = document.createElement("span");
+    badge.className = "catalog-card-kind";
+    badge.textContent = isCatalogTvItem(movie) ? "TV" : "Movie";
+    poster.appendChild(badge);
+
     const title = document.createElement("div");
     title.className = "catalog-card-title";
-    title.textContent = movie.title || "Movie";
+    title.textContent = movie.title || (isCatalogTvItem(movie) ? "TV Show" : "Movie");
 
     card.append(poster, title);
     if (movie.year) {
@@ -317,16 +341,36 @@ function renderCatalogGrid(movies, query) {
   window.shellMotion?.bindPosterInteractions?.(cards);
 }
 
+function updateCatalogDetailActions(movie) {
+  const isTv = isCatalogTvItem(movie);
+  if (catalogDownloadLocal) {
+    catalogDownloadLocal.textContent = isTv ? "Open Show Page" : "Download → PC";
+    catalogDownloadLocal.hidden = false;
+  }
+  if (catalogDownloadNas) {
+    catalogDownloadNas.hidden = isTv;
+  }
+  if (catalogAddQueue) {
+    catalogAddQueue.textContent = isTv ? "Scan Episodes" : "Add to Queue";
+  }
+}
+
 function renderCatalogDetail(movie) {
   selectedCatalogMovie = movie;
-  if (catalogDetailTitle) catalogDetailTitle.textContent = movie.title || "Movie";
-  if (catalogDetailYear) catalogDetailYear.textContent = movie.year || "";
+  const isTv = isCatalogTvItem(movie);
+  if (catalogDetailTitle) catalogDetailTitle.textContent = movie.title || (isTv ? "TV Show" : "Movie");
+  if (catalogDetailYear) {
+    catalogDetailYear.textContent = [isTv ? "TV Show" : "Movie", movie.year].filter(Boolean).join(" · ");
+  }
   if (catalogDetailStatus) {
-    catalogDetailStatus.textContent = "Ready to download or add to queue.";
+    catalogDetailStatus.textContent = isTv
+      ? "Open the show page, then scan a season into the shared queue."
+      : "Ready to download or add to queue.";
   }
   if (catalogDetailPoster) {
     renderCatalogPoster(catalogDetailPoster, movie, "catalog-detail-poster-fallback");
   }
+  updateCatalogDetailActions(movie);
   const wasDetail = catalogView === "detail";
   showCatalogView("detail");
   if (!wasDetail) {
@@ -338,8 +382,11 @@ async function openCatalogMovie(movie) {
   if (!movie?.movieUrl) return;
   selectedCatalogMovie = movie;
   renderCatalogDetail(movie);
-  streamStatus.textContent = `Opening “${movie.title || "movie"}”...`;
-  if (catalogDetailStatus) catalogDetailStatus.textContent = "Loading movie details...";
+  const isTv = isCatalogTvItem(movie);
+  streamStatus.textContent = `Opening “${movie.title || (isTv ? "show" : "movie")}”...`;
+  if (catalogDetailStatus) {
+    catalogDetailStatus.textContent = isTv ? "Loading show details..." : "Loading movie details...";
+  }
 
   const result = await window.streamApp.catalogOpenMovie(movie);
   if (result.movie) {
@@ -347,21 +394,44 @@ async function openCatalogMovie(movie) {
     renderCatalogDetail(selectedCatalogMovie);
   }
   if (!result.ok) {
-    streamStatus.textContent = result.error || "Could not open movie details.";
+    streamStatus.textContent = result.error || "Could not open details.";
     if (catalogDetailStatus) {
       catalogDetailStatus.textContent = result.error || "Showing search result details.";
     }
-    appendActivityLog("error", result.error || "Could not open movie details.");
+    appendActivityLog("error", result.error || "Could not open details.");
     return;
   }
 
   streamStatus.textContent = `Selected “${selectedCatalogMovie.title}”`;
-  if (catalogDetailStatus) catalogDetailStatus.textContent = "Ready to download or add to queue.";
+  if (catalogDetailStatus) {
+    catalogDetailStatus.textContent = isCatalogTvItem(selectedCatalogMovie)
+      ? "Open the show page, then scan a season into the shared queue."
+      : "Ready to download or add to queue.";
+  }
+}
+
+async function openSelectedCatalogTvShow() {
+  if (!selectedCatalogMovie?.movieUrl) {
+    appendActivityLog("error", "Select a TV show from the catalog first.");
+    return;
+  }
+  await setSiteBrowseMode(true);
+  const result = await window.streamApp.navigate(selectedCatalogMovie.movieUrl);
+  if (result?.ok === false) {
+    appendActivityLog("error", result.error || "Could not open the show page.");
+    return;
+  }
+  streamStatus.textContent = `Opened “${selectedCatalogMovie.title}” — pick a season, then Scan Current Season.`;
+  appendActivityLog("info", `Opened TV show “${selectedCatalogMovie.title}” for scanning`);
 }
 
 async function downloadSelectedCatalogMovie(destination) {
   if (!selectedCatalogMovie?.movieUrl) {
-    appendActivityLog("error", "Select a movie from the catalog first.");
+    appendActivityLog("error", "Select a title from the catalog first.");
+    return;
+  }
+  if (isCatalogTvItem(selectedCatalogMovie)) {
+    await openSelectedCatalogTvShow();
     return;
   }
 
@@ -389,8 +459,13 @@ async function downloadSelectedCatalogMovie(destination) {
 
 async function addSelectedCatalogMovieToQueue(destination = "local") {
   if (!selectedCatalogMovie?.movieUrl) {
-    appendActivityLog("error", "Select a movie from the catalog first.");
+    appendActivityLog("error", "Select a title from the catalog first.");
     return { ok: false };
+  }
+  if (isCatalogTvItem(selectedCatalogMovie)) {
+    await openSelectedCatalogTvShow();
+    appendActivityLog("info", "On the show page, use Scan Current Season, then Add Episodes to Queue.");
+    return { ok: true };
   }
 
   const result = await window.streamApp.addMovieToQueue({
@@ -415,7 +490,7 @@ async function runSearch(query, sourceInput = null) {
   if (!trimmed) {
     searchError.textContent = hideMovieDownloader
       ? "Enter an anime title to search."
-      : "Enter a movie title to search.";
+      : "Enter a movie or TV title to search.";
     if (catalogMode) showCatalogView("home");
     return;
   }
@@ -439,14 +514,15 @@ async function runSearch(query, sourceInput = null) {
     return;
   }
 
-  searchInput.value = trimmed;
-  toolbarSearchInput.value = trimmed;
+  if (toolbarSearchInput) toolbarSearchInput.value = trimmed;
   if (sourceInput) sourceInput.blur();
 
   if (catalogMode) {
-    renderCatalogGrid(result.movies || [], trimmed);
-    streamStatus.textContent = `Found ${result.movies?.length || 0} result${(result.movies?.length || 0) === 1 ? "" : "s"} for "${trimmed}"`;
-    appendActivityLog("success", `Catalog search: ${result.movies?.length || 0} titles for “${trimmed}”`);
+    renderCatalogGrid(result.movies || [], trimmed, result.counts || null);
+    const total = result.movies?.length || 0;
+    const tvCount = result.counts?.tv ?? (result.movies || []).filter((item) => isCatalogTvItem(item)).length;
+    streamStatus.textContent = `Found ${total} result${total === 1 ? "" : "s"} for "${trimmed}"${tvCount ? ` (${tvCount} TV)` : ""}`;
+    appendActivityLog("success", `Catalog search: ${total} titles for “${trimmed}”`);
     return;
   }
 
@@ -494,11 +570,18 @@ function formatBytes(bytes) {
 }
 
 function renderLibraryItem(movie) {
+  if (movie?.kind === "tv-show") {
+    return renderLibraryShowItem(movie);
+  }
+
   const item = document.createElement("li");
-  item.className = "library-item";
+  item.className = "library-item library-item-movie";
   item.title = movie.title;
   item.tabIndex = 0;
   item.setAttribute("role", "button");
+
+  const card = document.createElement("div");
+  card.className = "library-poster-card";
 
   if (movie.posterUrl) {
     const banner = document.createElement("img");
@@ -506,23 +589,29 @@ function renderLibraryItem(movie) {
     banner.src = movie.posterUrl;
     banner.alt = movie.title;
     banner.loading = "lazy";
+    banner.decoding = "async";
     banner.addEventListener("error", () => {
       banner.replaceWith(createBannerFallback(movie.title));
     });
-    item.appendChild(banner);
+    card.appendChild(banner);
   } else {
-    item.appendChild(createBannerFallback(movie.title));
+    card.appendChild(createBannerFallback(movie.title));
   }
 
-  const meta = document.createElement("div");
-  meta.className = "library-meta";
+  const scrub = document.createElement("div");
+  scrub.className = "library-poster-scrub";
+
+  const badge = document.createElement("span");
+  badge.className = "library-poster-badge";
+  badge.textContent = "Movie";
 
   const title = document.createElement("span");
   title.className = "library-title";
   title.textContent = movie.title;
-  meta.appendChild(title);
 
-  item.appendChild(meta);
+  scrub.append(badge, title);
+  card.appendChild(scrub);
+  item.appendChild(card);
 
   const openMovie = () => {
     if (movie.filePath) window.streamApp.openDownloadedMovie(movie.filePath);
@@ -535,6 +624,124 @@ function renderLibraryItem(movie) {
     }
   });
 
+  return item;
+}
+
+function renderLibraryShowItem(show) {
+  const item = document.createElement("li");
+  item.className = "library-item library-item-show";
+  item.title = show.title;
+  item.dataset.showId = show.id || show.title;
+
+  const header = document.createElement("button");
+  header.type = "button";
+  header.className = "library-show-header library-poster-card";
+
+  if (show.posterUrl) {
+    const banner = document.createElement("img");
+    banner.className = "library-banner";
+    banner.src = show.posterUrl;
+    banner.alt = show.title;
+    banner.loading = "lazy";
+    banner.decoding = "async";
+    banner.addEventListener("error", () => {
+      banner.replaceWith(createBannerFallback(show.title));
+    });
+    header.appendChild(banner);
+  } else {
+    header.appendChild(createBannerFallback(show.title));
+  }
+
+  const scrub = document.createElement("div");
+  scrub.className = "library-poster-scrub";
+
+  const badge = document.createElement("span");
+  badge.className = "library-poster-badge kind-tv";
+  badge.textContent = "TV";
+
+  const title = document.createElement("span");
+  title.className = "library-title";
+  title.textContent = show.title;
+
+  const subtitle = document.createElement("span");
+  subtitle.className = "library-item-kind";
+  subtitle.textContent = show.subtitle || `${show.episodeCount || 0} episodes`;
+
+  scrub.append(badge, title, subtitle);
+  header.appendChild(scrub);
+
+  const episodeList = document.createElement("ul");
+  episodeList.className = "library-episode-list";
+  episodeList.hidden = true;
+
+  for (const episode of show.episodes || []) {
+    const row = document.createElement("li");
+    row.className = "library-episode-item";
+
+    const label = document.createElement("span");
+    const code =
+      episode.season && episode.episode
+        ? `S${String(episode.season).padStart(2, "0")}E${String(episode.episode).padStart(2, "0")}`
+        : "";
+    label.textContent = code ? `${code} · ${episode.title}` : episode.title;
+
+    const play = document.createElement("button");
+    play.type = "button";
+    play.className = "library-episode-play";
+    play.textContent = "Play";
+    play.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (episode.filePath) window.streamApp.openDownloadedMovie(episode.filePath);
+    });
+
+    row.append(label, play);
+    episodeList.appendChild(row);
+  }
+
+  const toggle = () => {
+    const section = item.closest(".library-section");
+    const drawer = section?.querySelector(".library-episode-drawer");
+    const open = !item.classList.contains("expanded");
+
+    if (section) {
+      for (const other of section.querySelectorAll(".library-item-show.expanded")) {
+        if (other === item) continue;
+        other.classList.remove("expanded");
+        const otherList = other.querySelector(".library-episode-list");
+        if (otherList) otherList.hidden = true;
+      }
+    }
+
+    item.classList.toggle("expanded", open);
+    episodeList.hidden = !open;
+
+    if (drawer) {
+      drawer.replaceChildren();
+      if (open) {
+        const heading = document.createElement("div");
+        heading.className = "library-episode-drawer-head";
+        heading.innerHTML = `<strong>${show.title}</strong><span>${show.subtitle || `${show.episodeCount || 0} episodes`}</span>`;
+        const clone = episodeList.cloneNode(true);
+        clone.hidden = false;
+        clone.removeAttribute("hidden");
+        drawer.replaceChildren(heading, clone);
+        drawer.hidden = false;
+        drawer.querySelectorAll(".library-episode-play").forEach((btn, index) => {
+          btn.addEventListener("click", (event) => {
+            event.stopPropagation();
+            const episode = show.episodes?.[index];
+            if (episode?.filePath) window.streamApp.openDownloadedMovie(episode.filePath);
+          });
+        });
+      } else {
+        drawer.hidden = true;
+        drawer.replaceChildren();
+      }
+    }
+  };
+
+  header.addEventListener("click", toggle);
+  item.append(header, episodeList);
   return item;
 }
 
@@ -585,7 +792,11 @@ function renderLibrarySection(section, label, location) {
 
   const count = document.createElement("span");
   count.className = "library-count";
-  count.textContent = String(section.movies.length);
+  const entryCount = section.movies?.length || 0;
+  const showCount = section.showCount || section.movies?.filter((entry) => entry.kind === "tv-show").length || 0;
+  const movieCount = section.movieCount || entryCount - showCount;
+  count.textContent = String(entryCount);
+  count.title = `${movieCount} movie${movieCount === 1 ? "" : "s"} · ${showCount} show${showCount === 1 ? "" : "s"}`;
 
   const openFolder = document.createElement("button");
   openFolder.type = "button";
@@ -637,6 +848,12 @@ function renderLibrarySection(section, label, location) {
     list.appendChild(renderLibraryItem(movie));
   }
   wrapper.appendChild(list);
+
+  const drawer = document.createElement("div");
+  drawer.className = "library-episode-drawer";
+  drawer.hidden = true;
+  wrapper.appendChild(drawer);
+
   return wrapper;
 }
 
@@ -646,19 +863,27 @@ async function refreshLibrary(force = false) {
   if (!force && now - lastLibraryRefreshAt < 4000) return;
 
   lastLibraryRefreshAt = now;
-  const library = await window.streamApp.getDownloadedMovies();
+  const library = await window.streamApp.getDownloadedMovies({
+    backfillPosters: Boolean(force)
+  });
 
   librarySections.replaceChildren(
-    renderLibrarySection(library.local, "On this PC", "local"),
-    renderLibrarySection(library.nas, "On NAS", "nas")
+    renderLibrarySection(library.local, "Movies & TV on this PC", "local"),
+    renderLibrarySection(library.nas, "Movies & TV on NAS", "nas")
   );
 
   const env = await window.streamApp.getEnvironment();
-  librarySummary.textContent = `${library.totalCount} movie${library.totalCount === 1 ? "" : "s"} · NAS: ${formatLibraryPath(env.nasVideoFolder)}`;
+  librarySummary.textContent = `${library.totalCount} title${library.totalCount === 1 ? "" : "s"}${
+    library.showCount ? ` · ${library.showCount} TV show${library.showCount === 1 ? "" : "s"}` : ""
+  } · NAS: ${formatLibraryPath(env.nasVideoFolder)}`;
 
-  if (catalogMode && catalogView === "home") {
+  if (catalogMode && catalogView === "library") {
     const items = librarySections.querySelectorAll(".library-item");
-    window.shellMotion?.animateCatalogGrid?.(items);
+    // Avoid opacity-freeze entrance on library tiles — posters were staying invisible.
+    for (const item of items) {
+      item.style.opacity = "";
+      item.style.transform = "";
+    }
     window.shellMotion?.bindPosterInteractions?.(items);
   }
 }
@@ -668,8 +893,8 @@ if (refreshLibraryButton) {
 }
 
 function beginDownloadUi(destination) {
-  downloadButton.disabled = true;
-  saveNasButton.disabled = true;
+  setToolbarDisabled(downloadButton, true);
+  setToolbarDisabled(saveNasButton, true);
   if (progressHideTimer) clearTimeout(progressHideTimer);
   progressDock.hidden = false;
   updateProgressDock({
@@ -687,8 +912,8 @@ async function beginDownloadSession(destination) {
 }
 
 function resetDownloadButtons(options = {}) {
-  downloadButton.disabled = false;
-  saveNasButton.disabled = false;
+  setToolbarDisabled(downloadButton, false);
+  setToolbarDisabled(saveNasButton, false);
   if (!options.keepProgress) {
     hideProgressDock();
   }
@@ -709,7 +934,7 @@ function showDownloadError(message, debugText = null) {
 }
 
 function setSyncControlsDisabled(disabled) {
-  syncToNasButton.disabled = disabled;
+  setToolbarDisabled(syncToNasButton, disabled);
 }
 
 function queueStatusLabel(status) {
@@ -731,10 +956,13 @@ function formatQueueSummary(snapshot) {
   const counts = snapshot?.counts || {};
   const parts = [];
   if (counts.pending) parts.push(`${counts.pending} pending`);
+  if (counts.movies) parts.push(`${counts.movies} movie${counts.movies === 1 ? "" : "s"}`);
+  if (counts.episodes) parts.push(`${counts.episodes} ep${counts.episodes === 1 ? "" : "s"}`);
   if (counts.done) parts.push(`${counts.done} done`);
   if (counts.failed) parts.push(`${counts.failed} failed`);
   if (snapshot?.running) parts.push("running");
-  return parts.length ? parts.join(" · ") : "0 movies queued";
+  if (parts.length) return parts.join(" · ");
+  return "0 items queued";
 }
 
 function renderDownloadQueue(snapshot) {
@@ -746,7 +974,7 @@ function renderDownloadQueue(snapshot) {
     const empty = document.createElement("li");
     empty.className = "download-queue-empty";
     empty.textContent =
-      "Search the catalog and add titles here. Each download gets a fresh link right before it starts.";
+      "Add movies from search or TV episodes from a season scan. One queue runs everything.";
     downloadQueueList.appendChild(empty);
     return;
   }
@@ -754,6 +982,7 @@ function renderDownloadQueue(snapshot) {
   for (const item of items) {
     const row = document.createElement("li");
     row.className = `download-queue-item status-${item.status}`;
+    if (item.kind === "episode") row.classList.add("kind-episode");
     if (item.id === snapshot.currentId) row.classList.add("current");
 
     const title = document.createElement("span");
@@ -767,7 +996,8 @@ function renderDownloadQueue(snapshot) {
 
     const meta = document.createElement("span");
     meta.className = "download-queue-item-meta";
-    meta.textContent = item.destination === "nas" ? "NAS" : "PC";
+    const kindLabel = item.kind === "episode" ? "TV" : "Movie";
+    meta.textContent = `${kindLabel} · ${item.destination === "nas" ? "NAS" : "PC"}`;
 
     row.append(title, badge, meta);
 
@@ -808,8 +1038,8 @@ function updateQueueControls(snapshot) {
   addCurrentToQueueButton.disabled = running;
 
   if (running) {
-    downloadButton.disabled = true;
-    saveNasButton.disabled = true;
+    setToolbarDisabled(downloadButton, true);
+    setToolbarDisabled(saveNasButton, true);
   }
 }
 
@@ -818,6 +1048,7 @@ function handleQueueUpdate(payload = {}) {
   queueActive = Boolean(snapshot.running);
   renderDownloadQueue(snapshot);
   updateQueueControls(snapshot);
+  renderTvShowPlan(tvShowPlan, { processing: queueActive });
 
   if (queueActive && payload.item) {
     const target = payload.item.destination === "nas" ? "NAS" : "PC";
@@ -994,8 +1225,8 @@ async function runLibrarySync() {
 
   librarySyncActive = true;
   setSyncControlsDisabled(true);
-  downloadButton.disabled = true;
-  saveNasButton.disabled = true;
+  setToolbarDisabled(downloadButton, true);
+  setToolbarDisabled(saveNasButton, true);
   if (progressHideTimer) clearTimeout(progressHideTimer);
   progressDock.hidden = false;
   streamStatus.textContent = "Syncing Movies folder to NAS...";
@@ -1047,8 +1278,8 @@ async function runLibrarySync() {
     librarySyncActive = false;
     setSyncControlsDisabled(false);
     if (!downloadActive) {
-      downloadButton.disabled = false;
-      saveNasButton.disabled = false;
+      setToolbarDisabled(downloadButton, false);
+      setToolbarDisabled(saveNasButton, false);
     }
   }
 }
@@ -1066,8 +1297,8 @@ async function runDownload(destination) {
     if (handleNasAccessFailure(result, destination === "nas" ? "download" : null)) return;
     showDownloadError(result.error);
     streamStatus.textContent = result.error;
-    downloadButton.disabled = false;
-    saveNasButton.disabled = false;
+    setToolbarDisabled(downloadButton, false);
+    setToolbarDisabled(saveNasButton, false);
     return;
   }
 
@@ -1101,8 +1332,8 @@ function reportChromeLayout() {
     const margin = 10;
     const toolbar = document.querySelector(".toolbar");
     const statusBar = document.querySelector(".status-bar");
-    const sidebar = document.getElementById("library-sidebar");
     const dock = progressDock;
+    const browseDock = searchPanel?.classList.contains("site-browse-mode") ? searchPanel : null;
 
     const top = Math.ceil(
       (statusBar?.getBoundingClientRect().bottom ??
@@ -1110,12 +1341,20 @@ function reportChromeLayout() {
         74) + 4
     );
 
-    const sidebarLeft = sidebar?.getBoundingClientRect().left ?? window.innerWidth - 330;
-    const right = Math.ceil(window.innerWidth - sidebarLeft + margin);
+    const right = margin;
 
     let bottom = margin;
+    if (browseDock && !browseDock.hidden) {
+      bottom = Math.max(
+        bottom,
+        Math.ceil(window.innerHeight - browseDock.getBoundingClientRect().top + margin)
+      );
+    }
     if (dock && !dock.hidden) {
-      bottom = Math.ceil(window.innerHeight - dock.getBoundingClientRect().top + margin);
+      bottom = Math.max(
+        bottom,
+        Math.ceil(window.innerHeight - dock.getBoundingClientRect().top + margin)
+      );
     }
 
     window.streamApp.setChromeLayout({ top, right, bottom });
@@ -1128,7 +1367,7 @@ function setupChromeLayoutObserver() {
   const watched = [
     document.querySelector(".toolbar"),
     document.querySelector(".status-bar"),
-    document.getElementById("library-sidebar"),
+    searchPanel,
     progressDock
   ].filter(Boolean);
 
@@ -1139,7 +1378,12 @@ function setupChromeLayoutObserver() {
 
   if (progressDock) {
     const dockObserver = new MutationObserver(() => reportChromeLayout());
-    dockObserver.observe(progressDock, { attributes: true, attributeFilter: ["hidden"] });
+    dockObserver.observe(progressDock, { attributes: true, attributeFilter: ["hidden", "class"] });
+  }
+
+  if (searchPanel) {
+    const panelObserver = new MutationObserver(() => reportChromeLayout());
+    panelObserver.observe(searchPanel, { attributes: true, attributeFilter: ["hidden", "class"] });
   }
 
   window.addEventListener("resize", reportChromeLayout);
@@ -1295,8 +1539,8 @@ async function refreshDetection() {
         ? `Direct ${bestDirect.qualityLabel} download ready · ${bestDirect.displayUrl}`
         : `Stream ready (${best?.kind || "hls"}) · ${best?.displayUrl || ""}`;
       if (download.state === "idle") {
-        downloadButton.disabled = false;
-        saveNasButton.disabled = false;
+        setToolbarDisabled(downloadButton, false);
+        setToolbarDisabled(saveNasButton, false);
       }
     }
     return;
@@ -1310,8 +1554,8 @@ async function refreshDetection() {
           : "Search for a movie to begin."
         : `${playlists.length} playlist(s) seen, none selected yet.`;
     if (download.state === "idle") {
-      downloadButton.disabled = true;
-      saveNasButton.disabled = true;
+      setToolbarDisabled(downloadButton, true);
+      setToolbarDisabled(saveNasButton, true);
     }
     return;
   }
@@ -1322,8 +1566,8 @@ async function refreshDetection() {
     } else {
       streamStatus.textContent = `Detected ${best.kind} stream · ${best.displayUrl}`;
     }
-    downloadButton.disabled = false;
-    saveNasButton.disabled = false;
+    setToolbarDisabled(downloadButton, false);
+    setToolbarDisabled(saveNasButton, false);
   }
 }
 
@@ -1339,16 +1583,14 @@ async function refreshDownloadStatus() {
   if (status.state === "idle") {
     downloadStatus.textContent = "";
     stopButton.hidden = true;
-    downloadButton.disabled = false;
-    saveNasButton.disabled = false;
+    setToolbarDisabled(downloadButton, false);
+    setToolbarDisabled(saveNasButton, false);
     return;
   }
 
   stopButton.hidden = status.state !== "running";
-  downloadButton.disabled =
-    status.state === "running" || status.state === "finished" || status.state === "failed";
-  saveNasButton.disabled =
-    status.state === "running" || status.state === "finished" || status.state === "failed";
+  setToolbarDisabled(downloadButton, status.state === "running" || status.state === "finished" || status.state === "failed");
+  setToolbarDisabled(saveNasButton, status.state === "running" || status.state === "finished" || status.state === "failed");
 
   if (status.state === "running") {
     const target = status.destination === "nas" ? "NAS" : "PC";
@@ -1386,45 +1628,52 @@ function applyProfileLayout(env) {
     browseHomeButton.textContent = `Browse ${siteLabel}`;
     browseHomeButton.hidden = catalogMode;
   }
+  if (openLibraryButton) openLibraryButton.hidden = hideMovieDownloader || !catalogMode;
   if (connectSiteButton) connectSiteButton.hidden = hideMovieDownloader;
   if (catalogBrand && env.profileLabel) catalogBrand.textContent = env.profileLabel;
 
-  for (const button of [backButton, forwardButton, reloadSiteButton]) {
-    if (button) button.hidden = catalogMode;
-  }
+  if (tvShowSection) tvShowSection.hidden = true;
+  if (downloadQueueSection) downloadQueueSection.hidden = false;
 
   if (hideMovieDownloader) {
-    if (modeTabs) modeTabs.hidden = true;
-    if (downloadQueueSection) downloadQueueSection.hidden = true;
-    if (tvShowSection) tvShowSection.hidden = false;
     if (searchFeatures) searchFeatures.hidden = true;
     if (tvShowLead && env.tvShowLead) tvShowLead.textContent = env.tvShowLead;
-    if (tvShowTitle) tvShowTitle.textContent = "Anime Downloader";
-    if (tvShowBadge) tvShowBadge.hidden = true;
+    if (tvShowTitle) tvShowTitle.textContent = "Anime";
+    if (browseSiteForTvButton) browseSiteForTvButton.hidden = true;
+    if (backToCatalogButton) backToCatalogButton.hidden = true;
     if (catalogResults) catalogResults.hidden = true;
     if (catalogDetail) catalogDetail.hidden = true;
+    if (catalogLibrary) catalogLibrary.hidden = true;
     if (catalogHome) catalogHome.hidden = false;
     searchPanel.classList.remove("catalog-mode");
     setMovieToolbarVisible(false);
-    if (streamStatus) {
-      streamStatus.textContent = "Search Aniwave or open a series page to get started.";
+    for (const button of [backButton, forwardButton, reloadSiteButton]) {
+      if (button) button.hidden = false;
     }
-    setSidebarMode("tv");
+    if (streamStatus) {
+      streamStatus.textContent = "Search Aniwave or open a series page, then scan episodes into the queue.";
+    }
     return;
   }
 
   if (connectSiteButton) connectSiteButton.hidden = false;
-
-  if (modeTabs) modeTabs.hidden = false;
   if (searchFeatures) searchFeatures.hidden = catalogMode;
-  if (tvShowTitle) tvShowTitle.textContent = "TV Show Mode";
-  if (tvShowBadge) tvShowBadge.hidden = false;
+  if (tvShowTitle) tvShowTitle.textContent = "TV Shows";
+  if (tvShowLead) {
+    tvShowLead.textContent =
+      env.tvShowLead ||
+      "Browse the site for a season, scan episodes, then add them to the shared download queue with movies.";
+  }
   setMovieToolbarVisible(true);
   if (catalogMode) {
     searchPanel.classList.add("catalog-mode");
     showCatalogView("home");
+    setSiteBrowseMode(false);
+  } else {
+    for (const button of [backButton, forwardButton, reloadSiteButton]) {
+      if (button) button.hidden = false;
+    }
   }
-  setSidebarMode(env.defaultSidebarMode === "tv" ? "tv" : "movies");
 }
 
 async function initEnvironment() {
@@ -1434,13 +1683,9 @@ async function initEnvironment() {
     brandTitle.textContent = env.profileLabel;
     document.title = env.profileLabel;
   }
-  if (env.searchPlaceholder) {
+  if (env.searchPlaceholder && toolbarSearchInput) {
     toolbarSearchInput.placeholder = env.searchPlaceholder;
-    const exampleMatch = env.searchPlaceholder.match(/\(([^)]+)\)/);
-    searchInput.placeholder = exampleMatch ? exampleMatch[1] : env.searchPlaceholder;
   }
-  if (env.landingTitle && landingTitle) landingTitle.textContent = env.landingTitle;
-  if (env.landingLead && landingLead) landingLead.textContent = env.landingLead;
   if (openAnimeWindowButton) {
     openAnimeWindowButton.hidden = !env.openAnimeButton;
   }
@@ -1451,25 +1696,23 @@ async function initEnvironment() {
   if (!env.ffmpegPath) {
     streamStatus.textContent = "ffmpeg not found — install ffmpeg and restart the app.";
     if (!hideMovieDownloader) {
-      downloadButton.disabled = true;
-      saveNasButton.disabled = true;
+      setToolbarDisabled(downloadButton, true);
+      setToolbarDisabled(saveNasButton, true);
     }
   }
   envStatus.textContent = `NAS: ${formatLibraryPath(env.nasVideoFolder)} · Site: ${env.siteUsername ? `logged in as ${env.siteUsername}` : "not configured"}`;
-  adblockStatus.classList.toggle("visible", Boolean(env.adBlockerEnabled));
-  redirectStatus.classList.toggle("visible", Boolean(env.redirectProtectionEnabled));
   showSearchPanel();
   return env;
 }
 
-downloadButton.addEventListener("click", async () => {
+downloadButton?.addEventListener("click", async () => {
   if (catalogMode && selectedCatalogMovie?.movieUrl) {
     await downloadSelectedCatalogMovie("local");
     return;
   }
 
-  downloadButton.disabled = true;
-  saveNasButton.disabled = true;
+  setToolbarDisabled(downloadButton, true);
+  setToolbarDisabled(saveNasButton, true);
   streamStatus.textContent = "Starting download...";
   if (progressHideTimer) clearTimeout(progressHideTimer);
   progressDock.hidden = false;
@@ -1483,8 +1726,8 @@ downloadButton.addEventListener("click", async () => {
   const result = await window.streamApp.downloadCurrentStream();
   if (!result.ok) {
     streamStatus.textContent = result.error;
-    downloadButton.disabled = false;
-    saveNasButton.disabled = false;
+    setToolbarDisabled(downloadButton, false);
+    setToolbarDisabled(saveNasButton, false);
     hideProgressDock();
     return;
   }
@@ -1497,14 +1740,14 @@ downloadButton.addEventListener("click", async () => {
   await refreshDownloadStatus();
 });
 
-saveNasButton.addEventListener("click", async () => {
+saveNasButton?.addEventListener("click", async () => {
   if (catalogMode && selectedCatalogMovie?.movieUrl) {
     await downloadSelectedCatalogMovie("nas");
     return;
   }
 
-  downloadButton.disabled = true;
-  saveNasButton.disabled = true;
+  setToolbarDisabled(downloadButton, true);
+  setToolbarDisabled(saveNasButton, true);
   streamStatus.textContent = "Saving stream to NAS...";
   if (progressHideTimer) clearTimeout(progressHideTimer);
   progressDock.hidden = false;
@@ -1524,8 +1767,8 @@ saveNasButton.addEventListener("click", async () => {
       return;
     }
     streamStatus.textContent = result.error;
-    downloadButton.disabled = false;
-    saveNasButton.disabled = false;
+    setToolbarDisabled(downloadButton, false);
+    setToolbarDisabled(saveNasButton, false);
     hideProgressDock();
     return;
   }
@@ -1541,11 +1784,11 @@ stopButton.addEventListener("click", async () => {
   await refreshDownloadStatus();
 });
 
-refreshButton.addEventListener("click", async () => {
+refreshButton?.addEventListener("click", async () => {
   await window.streamApp.scanDirectDownloads();
   await refreshDetection();
 });
-streamDebugButton.addEventListener("click", refreshStreamDebug);
+streamDebugButton?.addEventListener("click", refreshStreamDebug);
 activityLogClear.addEventListener("click", clearActivityLog);
 activityLogCopy.addEventListener("click", async () => {
   const text = getActivityLogText();
@@ -1573,7 +1816,7 @@ reloadSiteButton.addEventListener("click", async () => {
 openFolderButton.addEventListener("click", () => window.streamApp.openOutputFolder());
 connectNasButton.addEventListener("click", () => showNasConnectPanel());
 connectSiteButton.addEventListener("click", () => showSiteConnectPanel());
-syncToNasButton.addEventListener("click", () => runLibrarySync());
+syncToNasButton?.addEventListener("click", () => runLibrarySync());
 nasConnectForm.addEventListener("submit", saveNasConnection);
 siteConnectForm.addEventListener("submit", saveSiteConnection);
 nasConnectCancel.addEventListener("click", hideNasConnectPanel);
@@ -1858,6 +2101,21 @@ if (catalogBackHome) {
   });
 }
 
+if (catalogBackLibraryHome) {
+  catalogBackLibraryHome.addEventListener("click", () => {
+    showCatalogView("home");
+    streamStatus.textContent = "Search the catalog to begin.";
+  });
+}
+
+if (openLibraryButton) {
+  openLibraryButton.addEventListener("click", () => {
+    if (!catalogMode) return;
+    showCatalogView("library");
+    streamStatus.textContent = "Your downloaded movies and TV shows.";
+  });
+}
+
 if (catalogBackResults) {
   catalogBackResults.addEventListener("click", () => {
     if (catalogMovies.length) showCatalogView("results");
@@ -1939,91 +2197,92 @@ queueDebugCopyButton.addEventListener("click", async () => {
   }
 });
 
-function setSidebarMode(mode) {
-  if (hideMovieDownloader) {
-    sidebarMode = "tv";
-    if (tvShowSection) tvShowSection.hidden = false;
-    if (downloadQueueSection) downloadQueueSection.hidden = true;
+async function setSiteBrowseMode(enabled) {
+  if (hideMovieDownloader || !catalogMode) {
+    siteBrowseMode = false;
+    if (browseSiteForTvButton) browseSiteForTvButton.hidden = true;
+    if (backToCatalogButton) backToCatalogButton.hidden = true;
+    searchPanel?.classList.remove("site-browse-mode");
     return;
   }
 
-  sidebarMode = mode === "tv" ? "tv" : "movies";
-  const isTv = sidebarMode === "tv";
+  siteBrowseMode = Boolean(enabled);
 
-  modeTabMovies.classList.toggle("active", !isTv);
-  modeTabTv.classList.toggle("active", isTv);
-  modeTabMovies.setAttribute("aria-selected", String(!isTv));
-  modeTabTv.setAttribute("aria-selected", String(isTv));
-  downloadQueueSection.hidden = isTv;
-  tvShowSection.hidden = !isTv;
+  if (browseSiteForTvButton) browseSiteForTvButton.hidden = siteBrowseMode;
+  if (backToCatalogButton) backToCatalogButton.hidden = !siteBrowseMode;
 
-  if (!catalogMode) return;
-
-  if (isTv) {
-    window.streamApp.setCatalogBrowserLocked(false).then(async () => {
-      for (const button of [backButton, forwardButton, reloadSiteButton]) {
-        if (button) button.hidden = false;
-      }
-      searchPanel.hidden = true;
-      streamStatus.textContent = "TV mode: open a season page on the site, then scan it.";
-      await window.streamApp.goHome();
-      await refreshNavigationButtons();
-    });
-  } else {
-    window.streamApp.setCatalogBrowserLocked(true).then(() => {
-      for (const button of [backButton, forwardButton, reloadSiteButton]) {
-        if (button) button.hidden = true;
-      }
-      showCatalogView(catalogView === "detail" || catalogView === "results" ? catalogView : "home");
-      streamStatus.textContent = "Search the catalog to begin.";
-    });
+  if (siteBrowseMode) {
+    await window.streamApp.setCatalogBrowserLocked(false);
+    for (const button of [backButton, forwardButton, reloadSiteButton]) {
+      if (button) button.hidden = false;
+    }
+    searchPanel.hidden = false;
+    searchPanel.classList.add("site-browse-mode");
+    if (catalogHome) catalogHome.hidden = false;
+    if (catalogLibrary) catalogLibrary.hidden = true;
+    if (catalogResults) catalogResults.hidden = true;
+    if (catalogDetail) catalogDetail.hidden = true;
+    streamStatus.textContent = "Site browse: open a season page, then scan episodes into the queue.";
+    await window.streamApp.goHome();
+    await refreshNavigationButtons();
+    reportChromeLayout();
+    return;
   }
+
+  searchPanel.classList.remove("site-browse-mode");
+  await window.streamApp.setCatalogBrowserLocked(true);
+  for (const button of [backButton, forwardButton, reloadSiteButton]) {
+    if (button) button.hidden = true;
+  }
+  showCatalogView(
+    catalogView === "detail" || catalogView === "results" || catalogView === "library"
+      ? catalogView
+      : "home"
+  );
+  streamStatus.textContent = "Search the catalog, or browse the site for TV seasons.";
+  reportChromeLayout();
 }
 
 function renderTvShowPlan(plan = tvShowPlan, payload = {}) {
   tvShowPlan = plan || null;
   const episodeCount = plan?.episodes?.length || 0;
-  const processing = Boolean(payload.processing || tvShowActive);
+  const processing = Boolean(payload.processing || tvShowActive || queueActive);
 
   if (!plan) {
-    tvShowSummary.textContent = "Open a season page, then scan it";
-    tvShowEpisodeList.innerHTML = '<li class="tv-show-empty">No season scanned yet.</li>';
-    startTvShowLocalButton.disabled = true;
-    startTvShowNasButton.disabled = true;
-    stopTvShowButton.hidden = true;
+    if (tvShowSummary) {
+      tvShowSummary.textContent = "Browse a season page, scan it, then add episodes here with movies.";
+    }
+    if (tvShowEpisodeList) {
+      tvShowEpisodeList.hidden = true;
+      tvShowEpisodeList.innerHTML = '<li class="tv-show-empty">No season scanned yet.</li>';
+    }
+    if (addTvToQueueButton) addTvToQueueButton.disabled = true;
     return;
   }
 
-  const phase = payload.phase || "";
   const season = plan.season || plan.episodes[0]?.season || 1;
   const seasonLabel = `Season ${String(season).padStart(2, "0")}`;
-
-  if (processing) {
-    if (payload.label) {
-      const quality = payload.qualityLabel ? ` · ${payload.qualityLabel}` : "";
-      tvShowSummary.textContent = `${plan.showTitle} ${seasonLabel}: ${payload.label}${quality} (${payload.index || "?"}/${payload.totalEpisodes || episodeCount})`;
-    } else {
-      tvShowSummary.textContent = `Downloading ${plan.showTitle} ${seasonLabel}...`;
-    }
-  } else {
-    tvShowSummary.textContent = `${plan.showTitle} ${seasonLabel} · ${episodeCount} episode${episodeCount === 1 ? "" : "s"} ready`;
+  if (tvShowSummary) {
+    tvShowSummary.textContent = `${plan.showTitle} ${seasonLabel} · ${episodeCount} episode${episodeCount === 1 ? "" : "s"} ready to add`;
   }
 
-  startTvShowLocalButton.disabled = processing || episodeCount === 0;
-  startTvShowNasButton.disabled = processing || episodeCount === 0;
-  scanTvShowButton.disabled = processing;
-  clearTvShowPlanButton.disabled = processing;
-  stopTvShowButton.hidden = !processing;
+  if (addTvToQueueButton) addTvToQueueButton.disabled = processing || episodeCount === 0;
+  if (scanTvShowButton) scanTvShowButton.disabled = processing;
+  if (clearTvShowPlanButton) clearTvShowPlanButton.disabled = processing;
+
+  if (!tvShowEpisodeList) return;
 
   if (!episodeCount) {
+    tvShowEpisodeList.hidden = false;
     tvShowEpisodeList.innerHTML = '<li class="tv-show-empty">No episodes found on the current page.</li>';
     return;
   }
 
+  tvShowEpisodeList.hidden = false;
   tvShowEpisodeList.innerHTML = plan.episodes
     .map((episode) => {
       const label = `S${String(episode.season || 1).padStart(2, "0")}E${String(episode.episode || 0).padStart(2, "0")}`;
-      return `<li class="tv-show-episode-item"><strong>${label} · ${escapeHtml(episode.title || "Episode")}</strong><span>${escapeHtml(episode.url || "")}</span></li>`;
+      return `<li class="tv-show-episode-item"><strong>${label} · ${escapeHtml(episode.title || "Episode")}</strong></li>`;
     })
     .join("");
 }
@@ -2095,8 +2354,12 @@ function handleTvShowUpdate(payload = {}) {
   }
 }
 
-modeTabMovies.addEventListener("click", () => setSidebarMode("movies"));
-modeTabTv.addEventListener("click", () => setSidebarMode("tv"));
+if (browseSiteForTvButton) {
+  browseSiteForTvButton.addEventListener("click", () => setSiteBrowseMode(true));
+}
+if (backToCatalogButton) {
+  backToCatalogButton.addEventListener("click", () => setSiteBrowseMode(false));
+}
 
 scanTvShowButton.addEventListener("click", async () => {
   appendActivityLog("info", "Scanning the current season for episodes...");
@@ -2123,32 +2386,25 @@ clearTvShowPlanButton.addEventListener("click", async () => {
   renderTvShowPlan(null);
 });
 
-async function startTvShowDownload(destination) {
-  if (progressHideTimer) clearTimeout(progressHideTimer);
-  progressHideTimer = null;
-  tvShowActive = true;
-  hideSearchPanel();
-
-  const result = await window.streamApp.startTvShowDownload(destination);
-  if (!result.ok) {
-    tvShowActive = false;
-    appendActivityLog("error", result.error);
-    return;
-  }
-
-  const target = destination === "nas" ? "NAS" : "PC";
-  appendActivityLog("info", `TV show download started → ${target}`);
-  if (progressHideTimer) clearTimeout(progressHideTimer);
-  progressDock.hidden = false;
+if (addTvToQueueButton) {
+  addTvToQueueButton.addEventListener("click", async () => {
+    const result = await window.streamApp.addTvPlanToQueue("local");
+    if (!result.ok) {
+      appendActivityLog("error", result.error);
+      return;
+    }
+    const added = result.added?.length || 0;
+    const skipped = result.skipped?.length || 0;
+    appendActivityLog(
+      "success",
+      `Added ${added} episode${added === 1 ? "" : "s"} to the shared queue${skipped ? ` (${skipped} already queued)` : ""}`
+    );
+    if (added) {
+      window.shellMotion?.pulseQueueChrome?.();
+      await refreshDownloadQueue();
+    }
+  });
 }
-
-startTvShowLocalButton.addEventListener("click", () => startTvShowDownload("local"));
-startTvShowNasButton.addEventListener("click", () => startTvShowDownload("nas"));
-
-stopTvShowButton.addEventListener("click", async () => {
-  await window.streamApp.stopTvShowDownload();
-  appendActivityLog("info", "Stopping TV show download...");
-});
 
 window.streamApp.onTvShowUpdated((payload) => {
   handleTvShowUpdate(payload);
@@ -2167,13 +2423,8 @@ window.streamApp.onStreamCaptureReset(() => {
   }
   streamStatus.textContent =
     "Stream capture reset — pause/play or seek the video to refresh, then download again.";
-  downloadButton.disabled = true;
-  saveNasButton.disabled = true;
-});
-
-searchForm.addEventListener("submit", async (event) => {
-  event.preventDefault();
-  await runSearch(searchInput.value, searchInput);
+  setToolbarDisabled(downloadButton, true);
+  setToolbarDisabled(saveNasButton, true);
 });
 
 toolbarSearchForm.addEventListener("submit", async (event) => {
