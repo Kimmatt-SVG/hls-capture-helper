@@ -9,6 +9,6 @@ Pod::Spec.new do |s|
   s.source_files = "ios/Sources/**/*.{swift,h,m,c,cc,mm,cpp}"
   s.ios.deployment_target = "15.0"
   s.dependency "Capacitor"
-  s.dependency "AMSMB2", "~> 3.0"
+  s.dependency "AMSMB2", "~> 2.7.1"
   s.swift_version = "5.9"
 end
