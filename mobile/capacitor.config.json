@@ -1,0 +1,16 @@
+{
+  "appId": "com.movieengine.streamdownloader.ios",
+  "appName": "Movie Stream Downloader",
+  "webDir": "www",
+  "ios": {
+    "contentInset": "automatic",
+    "backgroundColor": "#10131a",
+    "scrollEnabled": true
+  },
+  "plugins": {
+    "StatusBar": {
+      "style": "DARK",
+      "backgroundColor": "#10131a"
+    }
+  }
+}

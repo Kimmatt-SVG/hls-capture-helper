@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Settings</title>
+    <link rel="stylesheet" href="shell.css" />
+    <link rel="stylesheet" href="settings.css" />
+  </head>
+  <body class="settings-window">
+    <main class="settings-card">
+      <header class="settings-header">
+        <h1>Settings</h1>
+        <p class="settings-lead">Manage storage folders, NAS access, and site login.</p>
+      </header>
+
+      <section class="settings-section">
+        <div class="settings-section-head">
+          <strong>Quick actions</strong>
+          <span>Open related folders and windows</span>
+        </div>
+        <div class="settings-action-row">
+          <button id="open-anime-window" type="button" class="secondary" hidden>Anime Window</button>
+          <button id="open-movies-folder" type="button" class="secondary">Open Movies Folder</button>
+        </div>
+      </section>
+
+      <section class="settings-section">
+        <div class="settings-section-head">
+          <strong>Local video folder</strong>
+          <span>Movies and TV saved with Queue → PC</span>
+        </div>
+        <div class="settings-path-row">
+          <input
+            id="local-folder-path"
+            type="text"
+            spellcheck="false"
+            placeholder="Choose a folder on this Mac"
+          />
+          <button id="pick-local-folder" type="button" class="secondary">Choose Folder</button>
+          <button id="open-local-folder" type="button" class="secondary">Open</button>
+        </div>
+      </section>
+
+      <section class="settings-section">
+        <div class="settings-section-head">
+          <strong>NAS video folder</strong>
+          <span>Movies and TV saved with Queue → NAS</span>
+        </div>
+        <div class="settings-path-row">
+          <input
+            id="nas-folder-path"
+            type="text"
+            spellcheck="false"
+            placeholder="/Volumes/Media/Videos or smb://NAS/Media/Videos"
+          />
+          <button id="pick-nas-folder" type="button" class="secondary">Choose Folder</button>
+          <button id="open-nas-folder" type="button" class="secondary">Open</button>
+        </div>
+        <p class="settings-hint">
+          On macOS, pick a mounted share under <code>/Volumes</code> or paste an SMB path like
+          <code>smb://your-nas.local/Media/Videos</code>.
+        </p>
+
+        <form id="nas-connect-form" class="settings-form">
+          <div class="settings-form-head">
+            <strong>Connect NAS</strong>
+            <span>Sign in to your NAS share</span>
+          </div>
+          <label class="settings-field">
+            <span>Username</span>
+            <input id="nas-username" type="text" autocomplete="username" placeholder="e.g. admin" />
+          </label>
+          <label class="settings-field">
+            <span>Password</span>
+            <input id="nas-password" type="password" autocomplete="current-password" />
+          </label>
+          <p id="nas-connect-error" class="settings-inline-error"></p>
+          <button id="connect-nas" type="submit" class="accent">Connect NAS</button>
+        </form>
+      </section>
+
+      <section class="settings-section">
+        <form id="site-connect-form" class="settings-form">
+          <div class="settings-form-head">
+            <strong>Site login</strong>
+            <span>Save your Tornado Movies account</span>
+          </div>
+          <label class="settings-field">
+            <span>Username or Email</span>
+            <input id="site-username" type="text" autocomplete="username" placeholder="Your Tornado Movies username" />
+          </label>
+          <label class="settings-field">
+            <span>Password</span>
+            <input id="site-password" type="password" autocomplete="current-password" />
+          </label>
+          <label class="settings-checkbox">
+            <input id="site-auto-login" type="checkbox" checked />
+            <span>Auto-login when opening the site login page</span>
+          </label>
+          <p id="site-connect-error" class="settings-inline-error"></p>
+          <button id="connect-site" type="submit" class="accent">Save &amp; Login</button>
+        </form>
+      </section>
+
+      <p id="settings-status" class="settings-status" role="status"></p>
+
+      <footer class="settings-actions">
+        <button id="settings-close" type="button" class="secondary">Close</button>
+        <button id="settings-save" type="button" class="primary">Save Settings</button>
+      </footer>
+    </main>
+
+    <script src="settings.js"></script>
+  </body>
+</html>

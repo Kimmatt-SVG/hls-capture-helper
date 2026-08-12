@@ -75,6 +75,14 @@ function moviesDirectory() {
   const configured = process.env.HLS_CAPTURE_OUTPUT_DIR;
   if (configured) return path.resolve(configured);
 
+  try {
+    const { localVideoFolder } = require("./storage-settings");
+    const saved = localVideoFolder();
+    if (saved) return saved;
+  } catch {
+    // Fall back to default Movies folder.
+  }
+
   let outputFolder = "Movies";
   try {
     const { getActiveProfile } = require("./site-profiles");

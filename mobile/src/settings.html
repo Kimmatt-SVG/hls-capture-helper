@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover, user-scalable=no"
+    />
+    <title>Settings</title>
+    <link rel="stylesheet" href="shell.css" />
+    <link rel="stylesheet" href="settings.css" />
+    <link rel="stylesheet" href="css/mobile.css" />
+  </head>
+  <body class="settings-window platform-ios">
+    <main class="settings-card">
+      <header class="settings-header">
+        <h1>Settings</h1>
+        <p class="settings-lead">Configure on-device storage and connect to your NAS over SMB.</p>
+      </header>
+
+      <section class="settings-section">
+        <div class="settings-section-head">
+          <strong>Local video folder</strong>
+          <span>Downloads saved with Queue → Device</span>
+        </div>
+        <div class="settings-path-row mobile-settings-path-row">
+          <input id="local-folder-path" type="text" spellcheck="false" readonly />
+        </div>
+        <label class="settings-field">
+          <span>Subfolder inside app storage</span>
+          <input id="local-subfolder" type="text" spellcheck="false" placeholder="Movies" />
+        </label>
+        <div class="settings-action-row">
+          <button id="open-movies-folder" type="button" class="secondary">Open in Files</button>
+        </div>
+        <p class="settings-hint">
+          iOS stores downloads inside the app’s Documents folder. You can browse them in the Files app under
+          <strong>On My iPhone → Movie Stream Downloader</strong>.
+        </p>
+      </section>
+
+      <section class="settings-section">
+        <div class="settings-section-head">
+          <strong>NAS connection (SMB)</strong>
+          <span>Direct SMB connection from the app</span>
+        </div>
+        <label class="settings-field">
+          <span>NAS host</span>
+          <input id="nas-host" type="text" spellcheck="false" placeholder="nas.local or 192.168.1.50" />
+        </label>
+        <label class="settings-field">
+          <span>Share name</span>
+          <input id="nas-share" type="text" spellcheck="false" placeholder="Media" />
+        </label>
+        <label class="settings-field">
+          <span>Remote folder</span>
+          <input id="nas-path" type="text" spellcheck="false" placeholder="Videos" />
+        </label>
+        <p id="nas-folder-path" class="settings-hint"></p>
+
+        <form id="nas-connect-form" class="settings-form">
+          <label class="settings-field">
+            <span>Username</span>
+            <input id="nas-username" type="text" autocomplete="username" placeholder="e.g. Matthew" />
+          </label>
+          <label class="settings-field">
+            <span>Password</span>
+            <input id="nas-password" type="password" autocomplete="current-password" />
+          </label>
+          <p id="nas-connect-error" class="settings-inline-error"></p>
+          <div class="settings-action-row">
+            <button id="connect-nas" type="submit" class="accent">Connect NAS</button>
+            <button id="test-nas-write" type="button" class="secondary">Test Write</button>
+          </div>
+        </form>
+        <p class="settings-hint">
+          Unlike macOS Finder, iOS does not mount SMB shares system-wide. This app connects directly using your NAS
+          credentials. You can also add the same share manually in Files → Browse → ⋯ → Connect to Server.
+        </p>
+      </section>
+
+      <section class="settings-section">
+        <form id="site-connect-form" class="settings-form">
+          <div class="settings-form-head">
+            <strong>Site login</strong>
+            <span>Save your Tornado Movies account</span>
+          </div>
+          <label class="settings-field">
+            <span>Username or Email</span>
+            <input id="site-username" type="text" autocomplete="username" placeholder="Your Tornado Movies username" />
+          </label>
+          <label class="settings-field">
+            <span>Password</span>
+            <input id="site-password" type="password" autocomplete="current-password" />
+          </label>
+          <label class="settings-checkbox">
+            <input id="site-auto-login" type="checkbox" checked />
+            <span>Remember credentials on this device</span>
+          </label>
+          <p id="site-connect-error" class="settings-inline-error"></p>
+          <button id="connect-site" type="submit" class="accent">Save Login</button>
+        </form>
+      </section>
+
+      <p id="settings-status" class="settings-status" role="status"></p>
+
+      <footer class="settings-actions">
+        <button id="settings-close" type="button" class="secondary">Back to App</button>
+        <button id="settings-save" type="button" class="primary">Save Settings</button>
+      </footer>
+    </main>
+
+    <script src="js/platform.js"></script>
+    <script src="js/settings-ios.js"></script>
+    <script src="js/settings-page.js"></script>
+  </body>
+</html>

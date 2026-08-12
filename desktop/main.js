@@ -18,7 +18,8 @@ const {
   extractMovieIdFromUrl
 } = require("./lib/tornado-download-scraper");
 const { FfmpegRunner, findFfmpeg, outputDirectory, safeOutputName, streamHeadersForDownload } = require("./lib/ffmpeg-runner");
-const { loadNasConfig, ensureNasFolder } = require("./lib/nas-config");
+const { loadNasConfig, saveNasConfig, ensureNasFolder } = require("./lib/nas-config");
+const { loadStorageSettings, saveStorageSettings } = require("./lib/storage-settings");
 const { loadNasCredentials, saveNasCredentials, prepareNasAccess } = require("./lib/nas-auth");
 const { setupAdblocker, isAdblockerEnabled, syncAdblockerForUrl } = require("./lib/adblocker");
 const { setupNavigationGuard } = require("./lib/navigation-guard");
@@ -48,7 +49,7 @@ const {
   scrapeMovieDetail,
   buildTornadoSearchScraperScript
 } = require("./lib/tornado-search-scraper");
-const { setupTvShowScraper, scrapeTvShowFromPage } = require("./lib/tv-show-scraper");
+const { setupTvShowScraper, scrapeTvShowFromPage, scrapeTvSeasonsFromPage } = require("./lib/tv-show-scraper");
 const { runTvShowDownload } = require("./lib/tv-show-runner");
 const {
   canonicalContentUrl,
@@ -86,6 +87,7 @@ const GATEWAY_RETRY_MAX = 5;
 const GATEWAY_RETRY_DELAY_MS = 2000;
 
 let mainWindow = null;
+let settingsWindow = null;
 let browserView = null;
 const hlsCapture = new HlsCapture();
 const directDownloadCapture = new DirectDownloadCapture();
@@ -367,6 +369,10 @@ function loadContentPageForDownload(url, timeoutMs = 90_000) {
               )
             );
             return;
+          }
+          if (isCatalogMode() && catalogBrowserLocked) {
+            await pauseEmbeddedMedia(contents);
+            syncEmbeddedBrowserAudioPolicy();
           }
           finish();
         } catch (error) {
@@ -1107,6 +1113,7 @@ function showBrowserView() {
   }
   mainWindow.setBrowserView(browserView);
   layoutBrowserView();
+  syncEmbeddedBrowserAudioPolicy();
   mainWindow.webContents.send("page-load-succeeded");
 }
 
@@ -1125,7 +1132,47 @@ function isAutomatedBrowsingActive() {
 
 function hideBrowserView() {
   if (!mainWindow || !browserView) return;
+  syncEmbeddedBrowserAudioPolicy();
   mainWindow.removeBrowserView(browserView);
+  pauseEmbeddedMedia(browserView.webContents).catch(() => {});
+}
+
+const PAUSE_EMBEDDED_MEDIA_SCRIPT = `(() => {
+  for (const element of document.querySelectorAll("video, audio")) {
+    try {
+      element.muted = true;
+      element.volume = 0;
+      element.pause();
+      element.removeAttribute("autoplay");
+    } catch {}
+  }
+  return true;
+})();`;
+
+async function pauseEmbeddedMedia(contents) {
+  if (!contents || contents.isDestroyed()) return;
+  try {
+    await contents.executeJavaScript(PAUSE_EMBEDDED_MEDIA_SCRIPT);
+  } catch {
+    // Page may not be ready.
+  }
+}
+
+function shouldMuteEmbeddedBrowser() {
+  if (!browserView?.webContents || browserView.webContents.isDestroyed()) return true;
+  if (isCatalogMode() && catalogBrowserLocked) return true;
+  if (isAutomatedBrowsingActive()) return true;
+  if (!mainWindow?.getBrowserView?.() || mainWindow.getBrowserView() !== browserView) return true;
+  return false;
+}
+
+function syncEmbeddedBrowserAudioPolicy() {
+  if (!browserView?.webContents || browserView.webContents.isDestroyed()) return;
+  const mute = shouldMuteEmbeddedBrowser();
+  browserView.webContents.setAudioMuted(mute);
+  if (mute) {
+    pauseEmbeddedMedia(browserView.webContents).catch(() => {});
+  }
 }
 
 function showSearchLanding() {
@@ -1206,6 +1253,8 @@ async function catalogSearch(query) {
   try {
     await loadUrlAndWait(browserView.webContents, url, { settleMs: 2200 });
     await delay(800);
+    await pauseEmbeddedMedia(browserView.webContents);
+    syncEmbeddedBrowserAudioPolicy();
     let scrape = await scrapeSearchMovieLinks(browserView.webContents);
     if (!scrape.movies?.length) {
       await delay(1500);
@@ -1264,6 +1313,19 @@ async function catalogOpenMovie(movieUrl, fallback = {}) {
       posterUrl: scrape.movie?.posterUrl || fallback.posterUrl || undefined,
       year: scrape.movie?.year || fallback.year || undefined
     };
+
+    if (kindHint === "tv") {
+      hideBrowserView();
+      const seasonScrape = await scrapeTvSeasonsFromPage(browserView.webContents);
+      await pauseEmbeddedMedia(browserView.webContents);
+      syncEmbeddedBrowserAudioPolicy();
+      let seasons = seasonScrape.seasons || [];
+      if (!seasons.length) {
+        seasons = [{ number: 1, label: "Season 1", url: targetUrl }];
+      }
+      return { ok: true, movie, seasons };
+    }
+
     return { ok: true, movie };
   } catch (error) {
     return {
@@ -1293,6 +1355,13 @@ function sendNavigationState() {
 
 function setupBrowserNavigationHandlers() {
   const contents = browserView.webContents;
+
+  contents.on("media-started-playing", () => {
+    if (shouldMuteEmbeddedBrowser()) {
+      contents.setAudioMuted(true);
+      pauseEmbeddedMedia(contents).catch(() => {});
+    }
+  });
 
   contents.on("will-navigate", (event, url, isSameDocument, isMainFrame) => {
     if (!isMainFrame || isSameDocument || !isDirectDownloadUrl(url)) return;
@@ -1342,6 +1411,7 @@ function setupBrowserNavigationHandlers() {
 
     resetGatewayRetryState();
     ensureBrowserVisible();
+    syncEmbeddedBrowserAudioPolicy();
     sendNavigationState();
 
     if (/\/movie\//i.test(url)) {
@@ -1375,9 +1445,12 @@ async function createWindow() {
       partition: appProfile.browserPartition,
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false
+      sandbox: false,
+      backgroundThrottling: true
     }
   });
+
+  browserView.webContents.setAudioMuted(isCatalogMode());
 
   if (!isCatalogMode()) {
     mainWindow.setBrowserView(browserView);
@@ -1574,6 +1647,141 @@ ipcMain.handle("open-anime-window", () => {
   }
 });
 
+function notifyStorageSettingsUpdated() {
+  mainWindow?.webContents.send("storage-settings-updated");
+}
+
+function openSettingsWindow() {
+  if (settingsWindow && !settingsWindow.isDestroyed()) {
+    settingsWindow.focus();
+    return { ok: true };
+  }
+
+  settingsWindow = new BrowserWindow({
+    width: 760,
+    height: 820,
+    minWidth: 640,
+    minHeight: 560,
+    resizable: true,
+    minimizable: true,
+    maximizable: false,
+    title: "Storage Settings",
+    parent: mainWindow && !mainWindow.isDestroyed() ? mainWindow : undefined,
+    webPreferences: {
+      preload: path.join(__dirname, "settings-preload.js"),
+      contextIsolation: true,
+      nodeIntegration: false
+    }
+  });
+
+  settingsWindow.setMenu(null);
+  settingsWindow.loadFile(path.join(__dirname, "settings.html"));
+  settingsWindow.on("closed", () => {
+    settingsWindow = null;
+  });
+
+  return { ok: true };
+}
+
+async function pickDirectoryDialog(title, defaultPath = "") {
+  const owner =
+    settingsWindow && !settingsWindow.isDestroyed()
+      ? settingsWindow
+      : mainWindow && !mainWindow.isDestroyed()
+        ? mainWindow
+        : null;
+
+  const result = await dialog.showOpenDialog(owner, {
+    title,
+    defaultPath: defaultPath || undefined,
+    properties: ["openDirectory", "createDirectory"]
+  });
+
+  if (result.canceled || !result.filePaths?.[0]) {
+    return { canceled: true };
+  }
+
+  return { ok: true, path: result.filePaths[0] };
+}
+
+ipcMain.handle("open-settings-window", () => openSettingsWindow());
+
+ipcMain.handle("close-settings-window", () => {
+  if (settingsWindow && !settingsWindow.isDestroyed()) {
+    settingsWindow.close();
+  }
+  return { ok: true };
+});
+
+ipcMain.handle("get-storage-settings", () => {
+  const nas = loadNasConfig();
+  const saved = loadStorageSettings();
+  return {
+    localVideoFolder: saved.localVideoFolder || outputDirectory(),
+    nasVideoFolder: nas.videoFolder || ""
+  };
+});
+
+ipcMain.handle("save-storage-settings", (_event, payload = {}) => {
+  const localVideoFolder = String(payload.localVideoFolder || "").trim();
+  const nasVideoFolder = String(payload.nasVideoFolder || "").trim();
+
+  if (localVideoFolder) {
+    try {
+      fs.mkdirSync(localVideoFolder, { recursive: true });
+      fs.accessSync(localVideoFolder, fs.constants.W_OK);
+    } catch (error) {
+      return {
+        ok: false,
+        error: `Could not use local folder "${localVideoFolder}". (${error.message})`
+      };
+    }
+  }
+
+  saveStorageSettings({ localVideoFolder });
+  saveNasConfig({ videoFolder: nasVideoFolder });
+  notifyStorageSettingsUpdated();
+
+  return {
+    ok: true,
+    localVideoFolder: localVideoFolder || outputDirectory(),
+    nasVideoFolder
+  };
+});
+
+ipcMain.handle("pick-local-video-folder", async () => {
+  return pickDirectoryDialog("Choose local video folder", outputDirectory());
+});
+
+ipcMain.handle("pick-nas-video-folder", async () => {
+  const nas = loadNasConfig();
+  const defaultPath =
+    process.platform === "darwin" && fs.existsSync("/Volumes")
+      ? nas.videoFolder && fs.existsSync(nas.videoFolder)
+        ? nas.videoFolder
+        : "/Volumes"
+      : nas.videoFolder || outputDirectory();
+
+  return pickDirectoryDialog("Choose NAS video folder", defaultPath);
+});
+
+ipcMain.handle("open-storage-folder", (_event, folderPath) => {
+  const target = String(folderPath || "").trim();
+  if (!target) {
+    return { ok: false, error: "No folder path provided." };
+  }
+
+  if (target.startsWith("/")) {
+    const result = shell.openPath(target);
+    return result ? { ok: false, error: result } : { ok: true };
+  }
+
+  return {
+    ok: false,
+    error: "Open is available for local mounted folders. Save the path, then use Connect NAS for network shares."
+  };
+});
+
 ipcMain.handle("navigate", (_event, url) => {
   if (!browserView) return { ok: false, error: "Browser is not ready." };
   resetStreamCapture();
@@ -1596,6 +1804,7 @@ ipcMain.handle("set-catalog-browser-locked", (_event, locked = true) => {
     hideBrowserView();
     mainWindow?.webContents.send("show-search-landing");
   }
+  syncEmbeddedBrowserAudioPolicy();
   return { ok: true, locked: catalogBrowserLocked };
 });
 
@@ -1684,6 +1893,58 @@ ipcMain.handle("catalog-open-movie", async (_event, payload = {}) => {
     posterUrl: payload.posterUrl,
     year: payload.year
   });
+});
+
+ipcMain.handle("catalog-scan-tv-season", async (_event, payload = {}) => {
+  if (!isCatalogMode()) {
+    return { ok: false, error: "Catalog mode is only available in the movie app." };
+  }
+
+  const seasonUrl = String(payload.seasonUrl || payload.url || "").trim();
+  if (!seasonUrl) {
+    return { ok: false, error: "No season URL provided." };
+  }
+  if (!browserView?.webContents || browserView.webContents.isDestroyed()) {
+    return { ok: false, error: "Browser is not ready." };
+  }
+
+  try {
+    hideBrowserView();
+    await loadContentPageForDownload(seasonUrl);
+    const scan = await scrapeTvShowFromPage(browserView.webContents);
+    if (!scan.ok || !scan.episodes?.length) {
+      return {
+        ok: false,
+        error:
+          scan.error ||
+          "Could not find episodes for this season. Try another season or check the show page."
+      };
+    }
+
+    hideBrowserView();
+    tvShowPlan = {
+      showTitle: payload.showTitle || scan.showTitle,
+      season: payload.season || scan.season || scan.episodes[0]?.season || 1,
+      showUrl: payload.showUrl || scan.showUrl || seasonUrl,
+      posterUrl: payload.posterUrl || scan.posterUrl || null,
+      episodes: scan.episodes,
+      scannedAt: Date.now(),
+      notes: scan.notes || []
+    };
+    await pauseEmbeddedMedia(browserView.webContents);
+    syncEmbeddedBrowserAudioPolicy();
+    notifyTvShowUpdate({ phase: "scanned" });
+    queueDebug("catalog-tv-scan", `Scanned ${tvShowPlan.showTitle} season ${tvShowPlan.season}`, {
+      episodeCount: scan.episodes.length,
+      season: tvShowPlan.season,
+      showUrl: tvShowPlan.showUrl
+    });
+
+    return { ok: true, plan: tvShowPlan };
+  } catch (error) {
+    hideBrowserView();
+    return { ok: false, error: error.message || String(error) };
+  }
 });
 
 ipcMain.handle("download-movie", async (_event, payload = {}) => {
@@ -2608,10 +2869,10 @@ async function backfillOfficialShowPosters(library) {
 
 ipcMain.handle("get-downloaded-movies", async (_event, options = {}) => {
   const nas = loadNasConfig();
-  prepareNasAccess(nas.videoFolder);
+  const access = ensureNasFolder(nas.videoFolder);
   const library = listDownloadedMovies({
     localDir: outputDirectory(),
-    nasDir: nas.videoFolder
+    nasDir: access.ok ? access.path : nas.videoFolder
   });
   if (options?.backfillPosters) {
     try {

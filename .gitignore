@@ -16,6 +16,8 @@ temp/
 # Node/browser-extension tooling artifacts
 node_modules/
 desktop/dist*/
+mobile/node_modules/
+mobile/www/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*

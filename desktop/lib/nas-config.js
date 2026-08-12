@@ -43,21 +43,38 @@ function loadNasConfig() {
   return merged;
 }
 
+function saveNasConfig(config = {}) {
+  const current = loadNasConfig();
+  const next = {
+    portalUrl: config.portalUrl != null ? String(config.portalUrl).trim() : current.portalUrl,
+    videoFolder: config.videoFolder != null ? String(config.videoFolder).trim() : current.videoFolder
+  };
+
+  const target = path.join(app.getPath("userData"), "nas-config.json");
+  fs.mkdirSync(path.dirname(target), { recursive: true });
+  fs.writeFileSync(target, JSON.stringify(next, null, 2));
+  return next;
+}
+
 function isUncPath(folderPath) {
   return typeof folderPath === "string" && folderPath.startsWith("\\\\");
 }
 
 function ensureNasFolder(folderPath) {
-  if (!folderPath || typeof folderPath !== "string") {
+  if (!folderPath || typeof folderPath !== "string" || !folderPath.trim()) {
+    const { missingNasFolderError } = require("./nas-auth");
     return {
       ok: false,
       path: folderPath || "",
-      error:
-        "No NAS video folder is configured. Set NAS_VIDEO_FOLDER or create desktop/nas-config.json."
+      error: missingNasFolderError()
     };
   }
 
-  if (isUncPath(folderPath)) {
+  if (isUncPath(folderPath) || /^smb:\/\//i.test(folderPath)) {
+    return prepareNasAccess(folderPath);
+  }
+
+  if (process.platform === "darwin" && !folderPath.startsWith("/")) {
     return prepareNasAccess(folderPath);
   }
 
@@ -79,5 +96,6 @@ function ensureNasFolder(folderPath) {
 
 module.exports = {
   loadNasConfig,
+  saveNasConfig,
   ensureNasFolder
 };

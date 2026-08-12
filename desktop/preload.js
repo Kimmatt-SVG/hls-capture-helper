@@ -16,6 +16,7 @@ contextBridge.exposeInMainWorld("streamApp", {
   setCatalogBrowserLocked: (locked = true) => ipcRenderer.invoke("set-catalog-browser-locked", locked),
   searchMovies: (query) => ipcRenderer.invoke("search-movies", query),
   catalogOpenMovie: (payload) => ipcRenderer.invoke("catalog-open-movie", payload),
+  catalogScanTvSeason: (payload) => ipcRenderer.invoke("catalog-scan-tv-season", payload),
   downloadMovie: (payload) => ipcRenderer.invoke("download-movie", payload),
   addMovieToQueue: (payload) => ipcRenderer.invoke("add-movie-to-queue", payload),
   reloadCurrentPage: () => ipcRenderer.invoke("reload-current-page"),
@@ -50,6 +51,7 @@ contextBridge.exposeInMainWorld("streamApp", {
   setChromeLayout: (layout) => ipcRenderer.invoke("set-chrome-layout", layout),
   stopDownload: () => ipcRenderer.invoke("stop-download"),
   openOutputFolder: () => ipcRenderer.invoke("open-output-folder"),
+  openSettingsWindow: () => ipcRenderer.invoke("open-settings-window"),
   getDownloadedMovies: (options) => ipcRenderer.invoke("get-downloaded-movies", options || {}),
   openDownloadedMovie: (filePath) => ipcRenderer.invoke("open-downloaded-movie", filePath),
   revealDownloadedMovie: (filePath) => ipcRenderer.invoke("reveal-downloaded-movie", filePath),
@@ -142,6 +144,11 @@ contextBridge.exposeInMainWorld("streamApp", {
     const listener = (_event, entry) => callback(entry);
     ipcRenderer.on("site-login-debug", listener);
     return () => ipcRenderer.removeListener("site-login-debug", listener);
+  },
+  onStorageSettingsUpdated: (callback) => {
+    const listener = () => callback();
+    ipcRenderer.on("storage-settings-updated", listener);
+    return () => ipcRenderer.removeListener("storage-settings-updated", listener);
   },
   getSiteLoginDebug: () => ipcRenderer.invoke("get-site-login-debug")
 });

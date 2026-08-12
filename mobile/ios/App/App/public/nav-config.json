@@ -1,0 +1,13 @@
+{
+  "allowedDomains": [
+    "tornadomovies.co",
+    "vidnest.fun",
+    "animanga.fun",
+    "google.com",
+    "gstatic.com",
+    "googleapis.com",
+    "recaptcha.net",
+    "loadshare.org"
+  ],
+  "blockPopups": true
+}

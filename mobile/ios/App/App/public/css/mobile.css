@@ -1,0 +1,153 @@
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+}
+
+html,
+body.platform-ios {
+  height: auto;
+  min-height: 100%;
+  overflow: auto;
+  -webkit-text-size-adjust: 100%;
+  touch-action: manipulation;
+}
+
+body.platform-ios {
+  padding-top: var(--safe-top);
+  padding-bottom: calc(12px + var(--safe-bottom));
+  padding-left: var(--safe-left);
+  padding-right: var(--safe-right);
+}
+
+body.platform-ios .toolbar,
+body.platform-ios .status-bar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+
+body.platform-ios .mobile-toolbar {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+  padding: 12px 14px;
+}
+
+body.platform-ios .toolbar-primary,
+body.platform-ios .mobile-actions {
+  width: 100%;
+}
+
+body.platform-ios .toolbar-primary {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+}
+
+body.platform-ios .toolbar-search {
+  width: 100%;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+body.platform-ios .mobile-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+body.platform-ios .mobile-actions .secondary,
+body.platform-ios .mobile-actions .danger,
+body.platform-ios .toolbar-search button,
+body.platform-ios .catalog-detail-actions button,
+body.platform-ios .queue-run-bar button {
+  min-height: 44px;
+}
+
+body.platform-ios .mobile-status-bar {
+  padding: 8px 14px;
+  font-size: 12px;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+body.platform-ios .search-panel {
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+body.platform-ios .mobile-home-panels {
+  display: grid;
+  gap: 14px;
+}
+
+body.platform-ios .mobile-catalog-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+body.platform-ios .mobile-catalog-detail-body {
+  grid-template-columns: 1fr;
+}
+
+body.platform-ios .catalog-detail-poster {
+  max-width: 220px;
+  margin: 0 auto;
+}
+
+body.platform-ios .mobile-detail-actions {
+  display: grid;
+  grid-template-columns: 1fr;
+}
+
+body.platform-ios .catalog-episode-list {
+  max-height: 42vh;
+}
+
+body.platform-ios .mobile-progress-dock {
+  padding-bottom: var(--safe-bottom);
+}
+
+body.platform-ios .settings-window {
+  display: block;
+  min-height: 100vh;
+  padding: 16px;
+  overflow: auto;
+}
+
+body.platform-ios .settings-card {
+  width: 100%;
+  margin: 0 auto 24px;
+}
+
+body.platform-ios .mobile-settings-path-row,
+body.platform-ios .settings-path-row {
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 768px) {
+  body.platform-ios .mobile-toolbar {
+    flex-direction: row;
+    align-items: center;
+  }
+
+  body.platform-ios .toolbar-primary {
+    flex-direction: row;
+    align-items: center;
+  }
+
+  body.platform-ios .mobile-catalog-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  body.platform-ios .mobile-detail-actions {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1024px) {
+  body.platform-ios .mobile-catalog-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}

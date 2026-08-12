@@ -176,6 +176,75 @@ function buildTvShowScraperScript() {
     }));
   };
 
+  window.__tornadoScrapeSeasons = () => {
+    const seasons = new Map();
+
+    const addSeason = (number, label, url) => {
+      const seasonNumber = Number.parseInt(number, 10);
+      if (!seasonNumber || seasonNumber < 1 || !url) return;
+      const normalizedUrl = normalize(url);
+      if (!normalizedUrl) return;
+      if (!seasons.has(seasonNumber)) {
+        seasons.set(seasonNumber, {
+          number: seasonNumber,
+          label: String(label || "Season " + seasonNumber).trim(),
+          url: normalizedUrl
+        });
+      }
+    };
+
+    for (const select of document.querySelectorAll("select")) {
+      const context = [select.name, select.id, select.className, select.getAttribute("aria-label") || ""]
+        .join(" ");
+      if (!/season/i.test(context)) continue;
+
+      for (const option of select.options) {
+        const label = String(option.textContent || "").trim();
+        const value = String(option.value || "").trim();
+        const season = seasonFromText([label, value, context].join(" "));
+        if (!season) continue;
+        let url = value && !/^\\d+$/.test(value) ? value : window.location.href;
+        try {
+          url = new URL(url, window.location.href).href;
+        } catch {
+          url = window.location.href;
+        }
+        addSeason(season, label || "Season " + season, url);
+      }
+    }
+
+    const seasonLinkSelectors = [
+      ".seasons a[href]",
+      ".season-tabs a[href]",
+      ".season-list a[href]",
+      ".nav-seasons a[href]",
+      ".episodes-seasons a[href]",
+      "[data-season][href]",
+      "a[href*='season']"
+    ];
+
+    for (const selector of seasonLinkSelectors) {
+      for (const element of document.querySelectorAll(selector)) {
+        const href = element.getAttribute("href") || "";
+        if (!href || href.startsWith("#")) continue;
+        const label = String(element.textContent || element.getAttribute("title") || "").trim();
+        const dataSeason = element.getAttribute("data-season") || "";
+        const season = seasonFromText([label, dataSeason, href, element.getAttribute("aria-label") || ""].join(" "));
+        if (!season) continue;
+        addSeason(season, label || "Season " + season, href);
+      }
+    }
+
+    const activeSeason = detectActiveSeason();
+    addSeason(activeSeason, "Season " + activeSeason, window.location.href);
+
+    const list = [...seasons.values()].sort((a, b) => a.number - b.number);
+    return {
+      ok: list.length > 0,
+      seasons: list
+    };
+  };
+
   window.__tornadoScanTvShow = async () => {
     const pageUrl = normalize(window.location.href);
     const pathname = window.location.pathname || "";
@@ -241,6 +310,20 @@ function setupTvShowScraper(contents) {
   contents.on("did-finish-load", inject);
 }
 
+async function scrapeTvSeasonsFromPage(contents) {
+  if (!contents || contents.isDestroyed()) {
+    return { ok: false, seasons: [], error: "Browser is not ready." };
+  }
+
+  await contents.executeJavaScript(buildTvShowScraperScript()).catch(() => {});
+
+  try {
+    return await contents.executeJavaScript("window.__tornadoScrapeSeasons?.() || { ok: false, seasons: [] }");
+  } catch (error) {
+    return { ok: false, seasons: [], error: error.message || String(error) };
+  }
+}
+
 async function scrapeTvShowFromPage(contents) {
   if (!contents || contents.isDestroyed()) {
     return { ok: false, error: "Browser is not ready." };
@@ -263,5 +346,6 @@ async function scrapeTvShowFromPage(contents) {
 module.exports = {
   buildTvShowScraperScript,
   setupTvShowScraper,
+  scrapeTvSeasonsFromPage,
   scrapeTvShowFromPage
 };

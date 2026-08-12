@@ -1,0 +1,21 @@
+{
+  "homeUrl": "https://aniwaves.ru/home",
+  "searchPathTemplate": "/filter?keyword={query}",
+  "allowedDomains": [
+    "aniwaves.ru",
+    "vidplay.online",
+    "vidplay.site",
+    "vidplay.to",
+    "megacloud.tv",
+    "megacloud.blog",
+    "rabbitstream.net",
+    "streamwish.to",
+    "mp4upload.com",
+    "mycloud.lu",
+    "echovideo.ru",
+    "echovideo.to",
+    "play.echovideo.ru",
+    "gn1r5n.org",
+    "myvidplay.com"
+  ]
+}
