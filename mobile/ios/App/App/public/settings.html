@@ -20,22 +20,19 @@
 
       <section class="settings-section">
         <div class="settings-section-head">
-          <strong>Local video folder</strong>
-          <span>Downloads saved with Queue → Device</span>
+          <strong>App download folder</strong>
+          <span>Videos saved with Queue → Device stay in this app’s storage</span>
         </div>
         <div class="settings-path-row mobile-settings-path-row">
           <input id="local-folder-path" type="text" spellcheck="false" readonly />
         </div>
-        <label class="settings-field">
-          <span>Subfolder inside app storage</span>
-          <input id="local-subfolder" type="text" spellcheck="false" placeholder="Movies" />
-        </label>
         <div class="settings-action-row">
           <button id="open-movies-folder" type="button" class="secondary">Open in Files</button>
         </div>
         <p class="settings-hint">
-          iOS stores downloads inside the app’s Documents folder. You can browse them in the Files app under
-          <strong>On My iPhone → Movie Stream Downloader</strong>.
+          The app creates and uses its own <strong>Downloads</strong> folder inside iPhone storage. Browse it in the
+          Files app under <strong>On My iPhone → Movie Stream Downloader → Downloads</strong>. Other apps cannot use
+          this folder unless you share files from Files.
         </p>
       </section>
 

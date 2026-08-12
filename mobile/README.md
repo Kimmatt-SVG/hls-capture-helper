@@ -6,7 +6,7 @@ Capacitor-based iOS port of Movie Stream Downloader.
 
 - Responsive catalog UI reused from the desktop shell
 - In-catalog TV season selection and queueing
-- Native on-device storage under `Documents/Movies`
+- Native on-device storage in the app’s own `Downloads` folder (visible in Files)
 - Direct SMB NAS connection via the built-in `MovieEngine` plugin (AMSMB2)
 - Settings page for local subfolder, NAS host/share/path, credentials, and site login
 
@@ -35,7 +35,7 @@ The first run will:
 
 Open **Settings** in the app:
 
-- **Local video folder**: iOS stores downloads in the app Documents directory. Change the subfolder name if you want something other than `Movies`.
+- **App download folder**: videos save to `Downloads` inside the app’s iPhone storage. Open it from Settings → **Open in Files** or in Files under **On My iPhone → Movie Stream Downloader → Downloads**.
 - **NAS connection**: enter host, share, remote folder, username, and password, then tap **Connect NAS** or **Test Write**.
 
 iOS does not mount SMB shares system-wide like macOS Finder. The app connects directly over SMB using the credentials you save in Settings.

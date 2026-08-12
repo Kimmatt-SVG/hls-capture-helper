@@ -1,5 +1,4 @@
 const localFolderPath = document.getElementById("local-folder-path");
-const localSubfolderInput = document.getElementById("local-subfolder");
 const nasHostInput = document.getElementById("nas-host");
 const nasShareInput = document.getElementById("nas-share");
 const nasPathInput = document.getElementById("nas-path");
@@ -37,8 +36,7 @@ async function loadSettings() {
   const creds = await window.settingsApp.getNasCredentials();
   const siteCreds = await window.settingsApp.getSiteCredentials();
 
-  localFolderPath.value = settings.localVideoFolder || "";
-  localSubfolderInput.value = settings.localSubfolder || "Movies";
+  localFolderPath.value = settings.localVideoFolder || settings.localDisplayPath || "";
   nasHostInput.value = settings.nasHost || "";
   nasShareInput.value = settings.nasShare || "";
   nasPathInput.value = settings.nasPath || "Videos";
@@ -52,7 +50,7 @@ async function loadSettings() {
 
 async function collectSettingsPayload(includePassword = false) {
   const payload = {
-    localSubfolder: localSubfolderInput.value.trim() || "Movies",
+    localSubfolder: "Downloads",
     nasHost: nasHostInput.value.trim(),
     nasShare: nasShareInput.value.trim(),
     nasPath: nasPathInput.value.trim(),

@@ -35,7 +35,7 @@
         const local = await MovieEngine.getLocalMoviesPath();
         return {
           localVideoFolder: local.displayPath || local.path,
-          localSubfolder: settings.localSubfolder || "Movies",
+          localSubfolder: "Downloads",
           nasHost: settings.nasHost || "",
           nasShare: settings.nasShare || "",
           nasPath: settings.nasPath || "",
@@ -44,8 +44,8 @@
         };
       } catch (error) {
         return {
-          localVideoFolder: "On My iPhone > Movie Stream Downloader > Movies",
-          localSubfolder: "Movies",
+          localVideoFolder: "On My iPhone > Movie Stream Downloader > Downloads",
+          localSubfolder: "Downloads",
           nasHost: "",
           nasShare: "",
           nasPath: "Videos",
@@ -69,7 +69,7 @@
         nasUsername: payload.nasUsername,
         nasPassword: payload.nasPassword
       });
-      await MovieEngine.ensureLocalFolder({ subfolder: payload.localSubfolder || "Movies" });
+      await MovieEngine.ensureLocalFolder();
       return { ok: true };
     },
     async pickLocalFolder() {

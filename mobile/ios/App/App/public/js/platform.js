@@ -5,14 +5,14 @@
 
   function createMovieEngineFallback() {
     const defaults = {
-      localSubfolder: "Movies",
+      localSubfolder: "Downloads",
       nasHost: "",
       nasShare: "",
       nasPath: "Videos",
       nasUsername: "",
       nasPassword: "",
       nasVideoFolder: "",
-      localDisplayPath: "On My iPhone > Movie Stream Downloader > Movies"
+      localDisplayPath: "On My iPhone > Movie Stream Downloader > Downloads"
     };
 
     return {
@@ -24,6 +24,20 @@
       },
       async ensureLocalFolder() {
         return { ok: true, path: "", displayPath: defaults.localDisplayPath };
+      },
+      async listLocalDownloads() {
+        return {
+          location: "local",
+          folderPath: "",
+          displayPath: defaults.localDisplayPath,
+          exists: true,
+          accessible: true,
+          movies: [],
+          entries: [],
+          movieCount: 0,
+          showCount: 0,
+          episodeCount: 0
+        };
       },
       async saveStorageSettings(payload = {}) {
         return { ok: true, ...payload };

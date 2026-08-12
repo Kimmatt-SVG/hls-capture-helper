@@ -34,9 +34,17 @@
     } catch (error) {
       console.warn("getStorageSummary failed", error);
       return {
-        localPath: "On My iPhone > Movie Stream Downloader > Movies",
+        localPath: "On My iPhone > Movie Stream Downloader > Downloads",
         nasPath: ""
       };
+    }
+  }
+
+  async function ensureAppDownloadsFolder() {
+    try {
+      await MovieEngine.ensureLocalFolder();
+    } catch (error) {
+      console.warn("ensureLocalFolder failed", error);
     }
   }
 
@@ -51,7 +59,7 @@
     openStreamDebugLog: async () => ({ ok: true }),
     async getEnvironment() {
       let storage = {
-        localPath: "On My iPhone > Movie Stream Downloader > Movies",
+        localPath: "On My iPhone > Movie Stream Downloader > Downloads",
         nasPath: ""
       };
       try {
@@ -291,16 +299,62 @@
       window.location.href = "settings.html";
       return { ok: true };
     },
-    getDownloadedMovies: async () => ({
-      totalCount: 0,
-      showCount: 0,
-      local: { movies: [] },
-      nas: { movies: [] }
-    }),
-    openDownloadedMovie: async () => ({ ok: false }),
+    getDownloadedMovies: async () => {
+      await ensureAppDownloadsFolder();
+      let local = {
+        location: "local",
+        folderPath: "",
+        displayPath: "On My iPhone > Movie Stream Downloader > Downloads",
+        exists: true,
+        accessible: true,
+        error: null,
+        movies: [],
+        entries: [],
+        movieCount: 0,
+        showCount: 0,
+        episodeCount: 0
+      };
+
+      try {
+        local = await MovieEngine.listLocalDownloads();
+      } catch (error) {
+        local.error = error?.message || "Could not scan the app download folder.";
+        local.accessible = false;
+      }
+
+      const nas = {
+        location: "nas",
+        folderPath: "",
+        exists: false,
+        accessible: false,
+        error: "Use NAS settings to connect over SMB.",
+        movies: [],
+        entries: [],
+        movieCount: 0,
+        showCount: 0,
+        episodeCount: 0
+      };
+
+      const totalCount = (local.movieCount || local.movies?.length || 0) + (nas.movieCount || 0);
+      return {
+        local,
+        nas,
+        totalCount,
+        movieCount: local.movieCount || local.movies?.length || 0,
+        showCount: (local.showCount || 0) + (nas.showCount || 0),
+        episodeCount: (local.episodeCount || 0) + (nas.episodeCount || 0)
+      };
+    },
+    openDownloadedMovie: async () => ({ ok: false, error: "Playback from Library is coming soon on iOS." }),
     revealDownloadedMovie: async () => ({ ok: false }),
     embedMoviePoster: async () => ({ ok: false }),
-    openLibraryFolder: async () => ({ ok: false }),
+    openLibraryFolder: async (location) => {
+      if (location === "local") {
+        await MovieEngine.openLocalFolder();
+        return { ok: true };
+      }
+      return { ok: false, error: "Open NAS folders from Files after connecting your share." };
+    },
     openWarpDownload: async () => ({ ok: false }),
     openAnimeWindow: async () => ({ ok: false, error: "Anime mode is desktop-only." }),
     installWarpVpn: async () => ({ ok: false }),
@@ -326,4 +380,5 @@
   };
 
   window.MovieEngine = MovieEngine;
+  ensureAppDownloadsFolder();
 })();

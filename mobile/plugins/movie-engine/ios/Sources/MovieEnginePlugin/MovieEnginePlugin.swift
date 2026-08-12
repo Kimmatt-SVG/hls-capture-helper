@@ -44,11 +44,16 @@ public class MovieEnginePlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "saveStorageSettings", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "getLocalMoviesPath", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "ensureLocalFolder", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "listLocalDownloads", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "connectNas", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "testNasWrite", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "openLocalFolder", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "scrapePage", returnType: CAPPluginReturnPromise)
     ]
+
+    private static let appDownloadsFolderName = "Downloads"
+    private static let videoExtensions: Set<String> = ["mp4", "mkv", "mov", "m4v", "avi", "webm"]
+    private static let minimumVideoBytes: Int64 = 1024 * 1024
 
     private let settingsKey = "movie_engine_storage_settings"
 #if !targetEnvironment(simulator)
@@ -60,13 +65,95 @@ public class MovieEnginePlugin: CAPPlugin, CAPBridgedPlugin {
     private func defaults() -> StorageSettingsPayload {
         StorageSettingsPayload(
             localVideoFolder: "",
-            localSubfolder: "Movies",
+            localSubfolder: Self.appDownloadsFolderName,
             nasHost: "",
             nasShare: "",
             nasPath: "Videos",
             nasUsername: "",
             nasPassword: ""
         )
+    }
+
+    public override func load() {
+        super.load()
+        ensureAppDownloadsFolder()
+    }
+
+    @discardableResult
+    private func ensureAppDownloadsFolder() -> URL {
+        var settings = loadSettings()
+        settings.localSubfolder = Self.appDownloadsFolderName
+        saveSettings(settings)
+
+        let url = localMoviesURL(settings: settings)
+        try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+
+        let marker = url.appendingPathComponent(".downloads-folder", isDirectory: false)
+        if !FileManager.default.fileExists(atPath: marker.path) {
+            let text = "Movie Stream Downloader saves videos in this app folder.\n"
+            try? text.data(using: .utf8)?.write(to: marker)
+        }
+
+        return url
+    }
+
+    private func titleFromFilename(_ fileName: String) -> String {
+        let base = (fileName as NSString).deletingPathExtension
+        let cleaned = base
+            .replacingOccurrences(of: "_", with: " ")
+            .replacingOccurrences(of: ".", with: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return cleaned.isEmpty ? fileName : cleaned
+    }
+
+    private func isVideoFile(_ fileName: String) -> Bool {
+        let ext = (fileName as NSString).pathExtension.lowercased()
+        return Self.videoExtensions.contains(ext)
+    }
+
+    private func scanVideos(in directory: URL, maxDepth: Int, depth: Int = 0) -> [[String: Any]] {
+        guard depth <= maxDepth else { return [] }
+
+        let entries: [URL]
+        do {
+            entries = try FileManager.default.contentsOfDirectory(
+                at: directory,
+                includingPropertiesForKeys: [.isDirectoryKey, .fileSizeKey, .contentModificationDateKey],
+                options: [.skipsHiddenFiles]
+            )
+        } catch {
+            return []
+        }
+
+        var movies: [[String: Any]] = []
+
+        for entry in entries {
+            let values = try? entry.resourceValues(forKeys: [.isDirectoryKey, .fileSizeKey, .contentModificationDateKey])
+            if values?.isDirectory == true {
+                movies.append(contentsOf: scanVideos(in: entry, maxDepth: maxDepth, depth: depth + 1))
+                continue
+            }
+
+            let fileName = entry.lastPathComponent
+            guard isVideoFile(fileName) else { continue }
+
+            let size = Int64(values?.fileSize ?? 0)
+            guard size >= Self.minimumVideoBytes else { continue }
+
+            movies.append([
+                "filePath": entry.path,
+                "fileName": fileName,
+                "title": titleFromFilename(fileName),
+                "size": size,
+                "modifiedAt": (values?.contentModificationDate ?? Date()).timeIntervalSince1970 * 1000,
+                "kind": "movie",
+                "posterUrl": NSNull()
+            ])
+        }
+
+        return movies.sorted {
+            (($0["title"] as? String) ?? "").localizedCaseInsensitiveCompare(($1["title"] as? String) ?? "") == .orderedAscending
+        }
     }
 
     private func loadSettings() -> StorageSettingsPayload {
@@ -90,13 +177,11 @@ public class MovieEnginePlugin: CAPPlugin, CAPBridgedPlugin {
     }
 
     private func localMoviesURL(settings: StorageSettingsPayload) -> URL {
-        let subfolder = settings.localSubfolder.trimmingCharacters(in: .whitespacesAndNewlines)
-        let folder = subfolder.isEmpty ? "Movies" : subfolder
-        return documentsDirectory().appendingPathComponent(folder, isDirectory: true)
+        return documentsDirectory().appendingPathComponent(Self.appDownloadsFolderName, isDirectory: true)
     }
 
     private func displayPath(for url: URL) -> String {
-        "On My iPhone > Movie Stream Downloader > \(url.lastPathComponent)"
+        "On My iPhone > Movie Stream Downloader > \(Self.appDownloadsFolderName)"
     }
 
     @objc func getStorageSettings(_ call: CAPPluginCall) {
@@ -117,7 +202,7 @@ public class MovieEnginePlugin: CAPPlugin, CAPBridgedPlugin {
 
     @objc func saveStorageSettings(_ call: CAPPluginCall) {
         var settings = loadSettings()
-        if let value = call.getString("localSubfolder") { settings.localSubfolder = value }
+        settings.localSubfolder = Self.appDownloadsFolderName
         if let value = call.getString("nasHost") { settings.nasHost = value }
         if let value = call.getString("nasShare") { settings.nasShare = value }
         if let value = call.getString("nasPath") { settings.nasPath = value }
@@ -137,22 +222,30 @@ public class MovieEnginePlugin: CAPPlugin, CAPBridgedPlugin {
     }
 
     @objc func ensureLocalFolder(_ call: CAPPluginCall) {
-        var settings = loadSettings()
-        if let subfolder = call.getString("subfolder"), !subfolder.isEmpty {
-            settings.localSubfolder = subfolder
-            saveSettings(settings)
-        }
-        let url = localMoviesURL(settings: settings)
-        do {
-            try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
-            call.resolve([
-                "ok": true,
-                "path": url.path,
-                "displayPath": displayPath(for: url)
-            ])
-        } catch {
-            call.reject("Could not create local folder.", nil, error)
-        }
+        let url = ensureAppDownloadsFolder()
+        call.resolve([
+            "ok": true,
+            "path": url.path,
+            "displayPath": displayPath(for: url)
+        ])
+    }
+
+    @objc func listLocalDownloads(_ call: CAPPluginCall) {
+        let url = ensureAppDownloadsFolder()
+        let movies = scanVideos(in: url, maxDepth: 4)
+        call.resolve([
+            "location": "local",
+            "folderPath": url.path,
+            "displayPath": displayPath(for: url),
+            "exists": true,
+            "accessible": true,
+            "error": NSNull(),
+            "movies": movies,
+            "entries": movies,
+            "movieCount": movies.count,
+            "showCount": 0,
+            "episodeCount": 0
+        ])
     }
 
     private func buildNasDisplayPath(settings: StorageSettingsPayload) -> String {
