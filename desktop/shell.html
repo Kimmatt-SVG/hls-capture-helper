@@ -43,10 +43,7 @@
           <button id="go-forward" type="button" class="nav secondary" title="Forward" disabled aria-label="Forward">→</button>
         </div>
         <button id="reload-site" type="button" class="secondary" title="Reload the current page">Reload Page</button>
-        <button id="open-anime-window" type="button" class="secondary" title="Open a separate window for anime">Anime Window</button>
-        <button id="open-folder" type="button" class="secondary">Open Movies Folder</button>
-        <button id="connect-nas" type="button" class="secondary" title="Sign in to NAS share">Connect NAS</button>
-        <button id="connect-site" type="button" class="secondary" title="Save Tornado Movies login">Site Login</button>
+        <button id="open-settings" type="button" class="secondary" title="Storage, NAS, and login settings">Settings</button>
         <button id="stop-download" type="button" class="danger" hidden>Stop</button>
       </div>
     </header>
@@ -163,6 +160,14 @@
               <button id="catalog-download-local" type="button" class="primary">Download → PC</button>
               <button id="catalog-download-nas" type="button" class="accent">Save to NAS</button>
               <button id="catalog-add-queue" type="button" class="secondary">Add to Queue</button>
+            </div>
+            <div id="catalog-tv-panel" class="catalog-tv-panel" hidden>
+              <label class="catalog-season-field" for="catalog-season-select">
+                <span>Season</span>
+                <select id="catalog-season-select"></select>
+              </label>
+              <p id="catalog-episode-summary" class="catalog-episode-summary"></p>
+              <ul id="catalog-episode-list" class="catalog-episode-list"></ul>
             </div>
           </div>
         </div>

@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover, user-scalable=no"
+    />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <title>Movie Stream Downloader</title>
+    <link rel="stylesheet" href="shell.css" />
+    <link rel="stylesheet" href="css/mobile.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Outfit:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <script src="vendor/anime.umd.min.js"></script>
+    <script src="shell-motion.js"></script>
+  </head>
+  <body class="platform-ios">
+    <div class="ambient-bg" aria-hidden="true">
+      <span class="orb orb-1"></span>
+      <span class="orb orb-2"></span>
+      <span class="orb orb-3"></span>
+    </div>
+
+    <header class="toolbar mobile-toolbar">
+      <div class="toolbar-primary">
+        <div class="brand">
+          <strong id="brand-title">Movie Stream Downloader</strong>
+          <span id="stream-status" class="muted">Waiting for stream...</span>
+        </div>
+
+        <form id="toolbar-search-form" class="toolbar-search" autocomplete="off">
+          <input
+            id="toolbar-search-input"
+            type="search"
+            placeholder="Search movies & TV"
+            aria-label="Search movies and TV"
+          />
+          <button type="submit" class="primary">Search</button>
+        </form>
+        <button id="open-library" type="button" class="secondary" title="Browse downloaded movies and TV">Library</button>
+      </div>
+
+      <div class="actions mobile-actions">
+        <button id="open-settings" type="button" class="secondary" title="Storage, NAS, and login settings">Settings</button>
+        <button id="stop-download" type="button" class="danger" hidden>Stop</button>
+      </div>
+    </header>
+
+    <section class="status-bar mobile-status-bar">
+      <span id="env-status"></span>
+      <span id="download-status"></span>
+    </section>
+
+    <section id="search-panel" class="search-panel">
+      <div id="catalog-home" class="catalog-home">
+        <p id="search-error" class="search-error home-search-error" role="status"></p>
+
+        <div id="home-panels" class="home-panels mobile-home-panels">
+          <section id="download-queue-section" class="home-panel download-queue-section home-queue" aria-label="Download queue">
+            <div class="download-queue-head home-queue-header">
+              <div>
+                <strong>Download Queue</strong>
+                <span id="download-queue-summary" class="download-queue-summary">0 items queued</span>
+              </div>
+            </div>
+
+            <div class="queue-run-bar">
+              <button id="start-download-queue-local" type="button" class="primary">Queue → Device</button>
+              <button id="start-download-queue-nas" type="button" class="accent">Queue → NAS</button>
+              <button id="stop-download-queue" type="button" class="danger" hidden>Stop Queue</button>
+              <button id="clear-download-queue" type="button" class="secondary">Clear Queue</button>
+            </div>
+
+            <ul id="download-queue-list" class="download-queue-list home-queue-list">
+              <li class="download-queue-empty">Search a title, open it, pick a season, then queue episodes here.</li>
+            </ul>
+          </section>
+
+          <section class="home-panel activity-log-section activity-log-section-fill" aria-label="Activity log">
+            <div class="activity-log-head">
+              <div>
+                <strong>Activity Log</strong>
+                <span class="activity-log-hint">Errors and stream debug stay here</span>
+              </div>
+              <div class="activity-log-actions">
+                <button id="activity-log-copy" type="button" class="library-refresh" title="Copy log">⎘</button>
+                <button id="activity-log-clear" type="button" class="library-refresh" title="Clear log">×</button>
+              </div>
+            </div>
+            <ul id="activity-log" class="activity-log-list">
+              <li class="activity-log-empty">No activity yet.</li>
+            </ul>
+          </section>
+        </div>
+      </div>
+
+      <div id="catalog-results" class="catalog-results" hidden>
+        <button id="catalog-back-home" type="button" class="secondary catalog-back">← Back</button>
+        <div class="catalog-results-head">
+          <div>
+            <h2 id="catalog-results-title">Results</h2>
+            <p id="catalog-results-summary" class="catalog-results-summary"></p>
+          </div>
+        </div>
+        <div id="catalog-grid" class="catalog-grid mobile-catalog-grid" role="list"></div>
+      </div>
+
+      <div id="catalog-detail" class="catalog-detail" hidden>
+        <button id="catalog-back-results" type="button" class="secondary catalog-back">← Back to results</button>
+        <div class="catalog-detail-body mobile-catalog-detail-body">
+          <div id="catalog-detail-poster" class="catalog-detail-poster" aria-hidden="true"></div>
+          <div class="catalog-detail-meta">
+            <p id="catalog-detail-year" class="catalog-detail-year"></p>
+            <h2 id="catalog-detail-title">Movie</h2>
+            <p id="catalog-detail-status" class="catalog-detail-status"></p>
+            <div class="catalog-detail-actions mobile-detail-actions">
+              <button id="catalog-download-local" type="button" class="primary">Download → Device</button>
+              <button id="catalog-download-nas" type="button" class="accent">Download → NAS</button>
+              <button id="catalog-add-queue" type="button" class="secondary">Add Season to Queue</button>
+            </div>
+            <div id="catalog-tv-panel" class="catalog-tv-panel" hidden>
+              <label class="catalog-season-field" for="catalog-season-select">
+                <span>Season</span>
+                <select id="catalog-season-select"></select>
+              </label>
+              <p id="catalog-episode-summary" class="catalog-episode-summary"></p>
+              <ul id="catalog-episode-list" class="catalog-episode-list"></ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <footer id="progress-dock" class="progress-dock mobile-progress-dock" hidden>
+      <div id="progress-dock-body" class="progress-dock-body">
+        <div class="progress-top">
+          <strong id="progress-phase">Preparing download...</strong>
+          <span id="progress-percent">0%</span>
+        </div>
+        <div id="progress-track" class="progress-track">
+          <div id="progress-fill" class="progress-fill"></div>
+        </div>
+        <div class="progress-bottom">
+          <span id="progress-detail-left">Waiting to start...</span>
+          <span id="progress-detail-right"></span>
+        </div>
+      </div>
+    </footer>
+
+    <script src="js/platform.js"></script>
+    <script src="js/scrapers.js"></script>
+    <script src="js/stream-app-ios.js"></script>
+    <script src="js/shell-ios-shim.js"></script>
+    <script src="js/shell.js"></script>
+  </body>
+</html>

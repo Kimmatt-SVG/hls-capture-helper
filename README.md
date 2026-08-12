@@ -18,6 +18,8 @@ The project uses FFmpeg for validated HLS capture and supports direct-file downl
 - [Local and NAS Output](#local-and-nas-output)
 - [Configuration](#configuration)
 - [Build Windows Packages](#build-windows-packages)
+- [Build macOS Packages](#build-macos-packages)
+- [Build iOS App](#build-ios-app)
 - [Browser Extension](#browser-extension)
 - [Native Helper](#native-helper)
 - [Architecture](#architecture)
@@ -284,6 +286,26 @@ $env:NAS_VIDEO_FOLDER = "\\NAS\Media\Videos"
 
 If Windows cannot write to the UNC share, the app prompts for NAS credentials and attempts to establish the share connection. The account must have permission to create folders and files beneath the configured video folder.
 
+On macOS, use one of these `videoFolder` formats in `nas-config.json`:
+
+```json
+{
+  "portalUrl": "https://nas.example.test/",
+  "videoFolder": "/Volumes/Media/Videos"
+}
+```
+
+Or let the app mount the share when you sign in:
+
+```json
+{
+  "portalUrl": "https://nas.example.test/",
+  "videoFolder": "smb://NAS.local/Media/Videos"
+}
+```
+
+Windows-style UNC paths also work on macOS (`\\\\NAS\\Media\\Videos`). You can mount the share first in Finder with **Go → Connect to Server** (`Cmd+K`, then `smb://NAS.local/Media`) and point `videoFolder` at the mounted path under `/Volumes`.
+
 ## Configuration
 
 ### Environment variables
@@ -349,6 +371,63 @@ npx electron-builder --win --config.directories.output=dist-check
 ```
 
 The package is currently unsigned, so Windows may display a SmartScreen warning.
+
+## Build macOS Packages
+
+Install dependencies and run Electron Builder on macOS:
+
+```bash
+cd desktop
+npm install
+npm run build:mac
+```
+
+This creates an unsigned Apple Silicon DMG in:
+
+```text
+desktop/dist/
+```
+
+Other macOS build targets:
+
+```bash
+npm run build:mac:intel   # Intel (x64) DMG
+npm run build:mac:all     # Both Apple Silicon and Intel DMGs
+npm run build:dmg         # Alias for build:mac
+```
+
+Requirements:
+
+- macOS host machine
+- FFmpeg on `PATH` (for example via Homebrew: `brew install ffmpeg`)
+
+The package is currently unsigned, so macOS Gatekeeper may block the app on first launch. Open **System Settings → Privacy & Security** and choose **Open Anyway**, or right-click the app and choose **Open**.
+
+If a build reports that `dist/mac*/Movie Stream Downloader.app` is in use, close any running packaged copy or build into a temporary output directory:
+
+```bash
+npx electron-builder --mac --config.directories.output=dist-check
+```
+
+## Build iOS App
+
+The iOS port lives in `mobile/` and uses Capacitor with a native SMB/storage plugin.
+
+```bash
+cd mobile
+npm install
+npm run ios
+```
+
+This syncs the shared catalog UI from `desktop/`, generates `mobile/www`, and opens the Xcode project.
+
+### iOS storage and NAS
+
+- **Local downloads** are saved inside the app Documents folder (`On My iPhone → Movie Stream Downloader → Movies` by default).
+- **NAS access** uses direct SMB from the app. Open **Settings**, enter NAS host/share/path plus username and password, then tap **Connect NAS** or **Test Write**.
+- iOS does not mount SMB shares system-wide like macOS Finder, so the app connects manually over SMB.
+
+See [mobile/README.md](mobile/README.md) for full iOS setup notes.
 
 ## Browser Extension
 
@@ -616,7 +695,7 @@ npx electron-builder --win --config.directories.output=dist-check
 - Launch movie and anime modes.
 - Verify local output.
 - Verify NAS behavior when changing NAS code.
-- Build the Windows installer and portable executable.
+- Build the Windows installer and portable executable, or the macOS DMG when changing packaging.
 - Update this root README when behavior or configuration changes.
 
 ## License

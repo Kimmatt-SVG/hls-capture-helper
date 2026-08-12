@@ -1,0 +1,24 @@
+{
+  "name": "movie-stream-downloader-mobile",
+  "version": "1.0.0",
+  "description": "iOS port of Movie Stream Downloader",
+  "private": true,
+  "scripts": {
+    "build:web": "node scripts/sync-web-assets.mjs",
+    "cap:sync": "npm run build:web && npx cap sync ios",
+    "cap:open": "npx cap open ios",
+    "ios": "npm run cap:sync && npm run cap:open"
+  },
+  "dependencies": {
+    "@capacitor/app": "^6.0.2",
+    "@capacitor/core": "^6.2.0",
+    "@capacitor/filesystem": "^6.0.3",
+    "@capacitor/ios": "^6.2.0",
+    "@capacitor/preferences": "^6.0.3",
+    "@capacitor/status-bar": "^6.0.2",
+    "movie-engine": "file:plugins/movie-engine"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^6.2.0"
+  }
+}

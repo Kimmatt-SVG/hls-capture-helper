@@ -1,0 +1,21 @@
+{
+  "name": "movie-engine",
+  "version": "1.0.0",
+  "description": "Native storage and SMB bridge for Movie Stream Downloader iOS",
+  "main": "dist/plugin.cjs.js",
+  "module": "dist/esm/index.js",
+  "types": "dist/esm/index.d.ts",
+  "files": [
+    "dist/",
+    "ios/Sources",
+    "MovieEngine.podspec"
+  ],
+  "peerDependencies": {
+    "@capacitor/core": "^6.0.0"
+  },
+  "capacitor": {
+    "ios": {
+      "src": "ios"
+    }
+  }
+}

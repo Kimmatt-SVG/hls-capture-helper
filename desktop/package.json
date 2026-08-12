@@ -7,7 +7,11 @@
     "start": "electron .",
     "start:anime": "electron . --anime",
     "build": "electron-builder --win",
-    "build:portable": "electron-builder --win portable"
+    "build:portable": "electron-builder --win portable",
+    "build:mac": "electron-builder --mac dmg --arm64",
+    "build:mac:intel": "electron-builder --mac dmg --x64",
+    "build:mac:all": "npm run build:mac && npm run build:mac:intel",
+    "build:dmg": "npm run build:mac"
   },
   "author": "",
   "license": "MIT",
@@ -28,6 +32,10 @@
       "shell.css",
       "shell.js",
       "shell-motion.js",
+      "settings.html",
+      "settings.css",
+      "settings.js",
+      "settings-preload.js",
       "vendor/**/*",
       "anime-config.json",
       "lib/**/*"
@@ -66,6 +74,18 @@
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true
+    },
+    "mac": {
+      "target": [
+        "dmg"
+      ],
+      "category": "public.app-category.entertainment",
+      "identity": null,
+      "gatekeeperAssess": false,
+      "hardenedRuntime": false
+    },
+    "dmg": {
+      "title": "Movie Stream Downloader"
     }
   },
   "allowScripts": {
