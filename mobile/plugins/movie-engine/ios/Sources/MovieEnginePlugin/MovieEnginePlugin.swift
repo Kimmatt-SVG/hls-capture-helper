@@ -1,7 +1,9 @@
 import Foundation
 import Capacitor
-import AMSMB2
 import WebKit
+#if !targetEnvironment(simulator)
+import AMSMB2
+#endif
 
 private final class ScrapeNavigationDelegate: NSObject, WKNavigationDelegate {
     private let onFinish: () -> Void
@@ -49,7 +51,9 @@ public class MovieEnginePlugin: CAPPlugin, CAPBridgedPlugin {
     ]
 
     private let settingsKey = "movie_engine_storage_settings"
+#if !targetEnvironment(simulator)
     private var cachedClient: AMSMB2?
+#endif
     private var scrapeWebView: WKWebView?
     private var scrapeDelegate: ScrapeNavigationDelegate?
 
@@ -160,7 +164,13 @@ public class MovieEnginePlugin: CAPPlugin, CAPBridgedPlugin {
         return "smb://\(settings.nasHost)/\(settings.nasShare)/\(remotePath)"
     }
 
-    private func smbClient(settings: StorageSettingsPayload, completion: @escaping (Result<AMSMB2, Error>) -> Void) {
+    private func smbClient(settings: StorageSettingsPayload, completion: @escaping (Result<Any, Error>) -> Void) {
+#if targetEnvironment(simulator)
+        completion(.failure(NSError(domain: "MovieEngine", code: 100, userInfo: [
+            NSLocalizedDescriptionKey: "NAS/SMB requires a physical iPhone. Simulators can still browse and queue, but not connect to your NAS."
+        ])))
+        return
+#else
         let host = settings.nasHost.trimmingCharacters(in: .whitespacesAndNewlines)
         let share = settings.nasShare.trimmingCharacters(in: .whitespacesAndNewlines)
         let username = settings.nasUsername.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -203,6 +213,7 @@ public class MovieEnginePlugin: CAPPlugin, CAPBridgedPlugin {
             self.cachedClient = client
             completion(.success(client))
         }
+#endif
     }
 
     private func normalizedRemotePath(_ raw: String) -> String {
@@ -244,7 +255,14 @@ public class MovieEnginePlugin: CAPPlugin, CAPBridgedPlugin {
             switch result {
             case .failure(let error):
                 call.resolve(["ok": false, "error": error.localizedDescription])
-            case .success(let client):
+            case .success(let clientValue):
+#if targetEnvironment(simulator)
+                call.resolve(["ok": false, "error": "NAS/SMB requires a physical iPhone."])
+#else
+                guard let client = clientValue as? AMSMB2 else {
+                    call.resolve(["ok": false, "error": "SMB client unavailable."])
+                    return
+                }
                 let remotePath = self.normalizedRemotePath(settings.nasPath)
                 let targetDir = remotePath.isEmpty ? "/" : "/\(remotePath)"
                 client.createDirectory(atPath: targetDir) { error in
@@ -263,6 +281,7 @@ public class MovieEnginePlugin: CAPPlugin, CAPBridgedPlugin {
                         call.resolve(["ok": true])
                     }
                 }
+#endif
             }
         }
     }

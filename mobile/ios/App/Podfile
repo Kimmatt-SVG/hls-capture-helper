@@ -30,15 +30,39 @@ post_install do |installer|
     target.build_configurations.each do |config|
       config.build_settings['CLANG_ENABLE_EXPLICIT_MODULES'] = 'NO'
       config.build_settings['SWIFT_ENABLE_EXPLICIT_MODULES'] = 'NO'
-      # AMSMB2 2.7.1 ships a device-only arm64 slice; use x86_64 simulator on Apple Silicon.
-      config.build_settings['EXCLUDED_ARCHS[sdk=iphonesimulator*]'] = 'arm64'
+    end
+
+    if target.name == 'AMSMB2'
+      # AMSMB2 2.7.1 only ships device binaries; build it for iPhone hardware only.
+      target.build_configurations.each do |config|
+        config.build_settings['SUPPORTED_PLATFORMS'] = 'iphoneos'
+      end
+    end
+
+    if target.name == 'MovieEngine'
+      target.build_configurations.each do |config|
+        other_ldflags = config.build_settings['OTHER_LDFLAGS[sdk=iphonesimulator*]'] || '$(inherited)'
+        other_ldflags = other_ldflags.is_a?(Array) ? other_ldflags.join(' ') : other_ldflags.to_s
+        other_ldflags = other_ldflags.gsub('-framework "AMSMB2"', '').gsub('-framework AMSMB2', '').strip
+        config.build_settings['OTHER_LDFLAGS[sdk=iphonesimulator*]'] = other_ldflags
+        include_paths = config.build_settings['SWIFT_INCLUDE_PATHS[sdk=iphonesimulator*]'] || '$(inherited)'
+        include_paths = include_paths.is_a?(Array) ? include_paths.join(' ') : include_paths.to_s
+        include_paths = include_paths.gsub('"${PODS_ROOT}/AMSMB2/libsmb2/include"', '')
+          .gsub('"${PODS_ROOT}/AMSMB2/libsmb2/**"', '')
+          .gsub(/\s+/, ' ').strip
+        config.build_settings['SWIFT_INCLUDE_PATHS[sdk=iphonesimulator*]'] = include_paths
+        swift_flags = config.build_settings['OTHER_SWIFT_FLAGS[sdk=iphonesimulator*]'] || '$(inherited)'
+        swift_flags = swift_flags.is_a?(Array) ? swift_flags.join(' ') : swift_flags.to_s
+        swift_flags = swift_flags.gsub('-Xcc -fmodule-map-file="${PODS_ROOT}/AMSMB2/libsmb2/include/module.modulemap"', '').strip
+        config.build_settings['OTHER_SWIFT_FLAGS[sdk=iphonesimulator*]'] = swift_flags
+      end
     end
   end
 
   installer.aggregate_targets.each do |aggregate_target|
     aggregate_target.user_project.native_targets.each do |target|
       target.build_configurations.each do |config|
-        config.build_settings['EXCLUDED_ARCHS[sdk=iphonesimulator*]'] = 'arm64'
+        config.build_settings.delete('EXCLUDED_ARCHS[sdk=iphonesimulator*]')
       end
     end
     aggregate_target.user_project.save
