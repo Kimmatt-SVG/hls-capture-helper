@@ -31,7 +31,7 @@
       <div class="toolbar-primary">
         <div class="brand">
           <strong id="brand-title">Movie Stream Downloader</strong>
-          <span id="stream-status" class="muted">Waiting for stream...</span>
+          <span id="stream-status" class="muted">Search for a movie to begin</span>
         </div>
 
         <form id="toolbar-search-form" class="toolbar-search" autocomplete="off">
@@ -43,16 +43,16 @@
           />
           <button type="submit" class="primary">Search</button>
         </form>
-        <button id="open-library" type="button" class="secondary" title="Browse downloaded movies and TV">Library</button>
       </div>
 
       <div class="actions mobile-actions">
+        <button id="open-library" type="button" class="secondary" title="Browse downloaded movies and TV">Library</button>
         <button id="open-settings" type="button" class="secondary" title="Storage, NAS, and login settings">Settings</button>
         <button id="stop-download" type="button" class="danger" hidden>Stop</button>
       </div>
     </header>
 
-    <section class="status-bar mobile-status-bar">
+    <section class="status-bar mobile-status-bar" hidden>
       <span id="env-status"></span>
       <span id="download-status"></span>
     </section>

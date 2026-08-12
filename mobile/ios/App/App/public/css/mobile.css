@@ -3,57 +3,77 @@
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --safe-left: env(safe-area-inset-left, 0px);
   --safe-right: env(safe-area-inset-right, 0px);
+  --mobile-gutter: 12px;
 }
 
 html,
 body.platform-ios {
-  height: auto;
+  height: 100%;
   min-height: 100%;
-  overflow: auto;
+  overflow: hidden;
   -webkit-text-size-adjust: 100%;
   touch-action: manipulation;
 }
 
 body.platform-ios {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+  max-height: 100dvh;
   padding-top: var(--safe-top);
-  padding-bottom: calc(12px + var(--safe-bottom));
+  padding-bottom: var(--safe-bottom);
   padding-left: var(--safe-left);
   padding-right: var(--safe-right);
 }
 
-body.platform-ios .toolbar,
-body.platform-ios .status-bar {
-  position: sticky;
-  top: 0;
-  z-index: 20;
-}
-
 body.platform-ios .mobile-toolbar {
+  flex: 0 0 auto;
+  position: relative;
+  top: auto;
   flex-direction: column;
   align-items: stretch;
-  gap: 12px;
-  padding: 12px 14px;
-}
-
-body.platform-ios .toolbar-primary,
-body.platform-ios .mobile-actions {
-  width: 100%;
+  gap: 10px;
+  margin: var(--mobile-gutter) var(--mobile-gutter) 8px;
+  padding: 14px;
 }
 
 body.platform-ios .toolbar-primary {
+  width: 100%;
   flex-direction: column;
   align-items: stretch;
   gap: 10px;
 }
 
+body.platform-ios .brand strong {
+  font-size: 20px;
+  line-height: 1.15;
+}
+
+body.platform-ios .brand .muted,
+body.platform-ios #stream-status {
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--text-secondary);
+}
+
 body.platform-ios .toolbar-search {
+  display: grid;
   width: 100%;
   grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  flex: none;
+}
+
+body.platform-ios .toolbar-search input {
+  width: 100%;
+  min-height: 44px;
+  font-size: 16px;
 }
 
 body.platform-ios .mobile-actions {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  width: 100%;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
 }
 
@@ -63,23 +83,66 @@ body.platform-ios .toolbar-search button,
 body.platform-ios .catalog-detail-actions button,
 body.platform-ios .queue-run-bar button {
   min-height: 44px;
+  width: 100%;
 }
 
 body.platform-ios .mobile-status-bar {
-  padding: 8px 14px;
-  font-size: 12px;
-  line-height: 1.4;
-  word-break: break-word;
+  display: none !important;
 }
 
 body.platform-ios .search-panel {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: auto !important;
+  max-height: none;
+  margin: 0 var(--mobile-gutter) var(--mobile-gutter);
+  padding: 0;
   overflow: auto;
   -webkit-overflow-scrolling: touch;
+  align-items: stretch;
 }
 
-body.platform-ios .mobile-home-panels {
+body.platform-ios .catalog-home {
+  width: 100%;
+  min-height: auto;
+  gap: 10px;
+}
+
+body.platform-ios .mobile-home-panels,
+body.platform-ios .home-panels {
+  display: flex !important;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0 !important;
+  grid-template-columns: none !important;
+  grid-template-rows: none !important;
+}
+
+body.platform-ios .home-panel {
+  min-height: 0;
+  max-height: none;
+  flex: 0 0 auto;
+}
+
+body.platform-ios .download-queue-section {
+  order: 1;
+}
+
+body.platform-ios .activity-log-section {
+  order: 2;
+  min-height: 160px;
+  max-height: 34dvh;
+}
+
+body.platform-ios .queue-run-bar {
   display: grid;
-  gap: 14px;
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+
+body.platform-ios .download-queue-list,
+body.platform-ios .activity-log-list {
+  max-height: 28dvh;
 }
 
 body.platform-ios .mobile-catalog-grid {
@@ -99,13 +162,19 @@ body.platform-ios .catalog-detail-poster {
 body.platform-ios .mobile-detail-actions {
   display: grid;
   grid-template-columns: 1fr;
+  gap: 8px;
 }
 
 body.platform-ios .catalog-episode-list {
-  max-height: 42vh;
+  max-height: 42dvh;
+}
+
+body.platform-ios .catalog-back {
+  margin-bottom: 10px;
 }
 
 body.platform-ios .mobile-progress-dock {
+  flex: 0 0 auto;
   padding-bottom: var(--safe-bottom);
 }
 
@@ -126,28 +195,16 @@ body.platform-ios .settings-path-row {
   grid-template-columns: 1fr;
 }
 
-@media (min-width: 768px) {
-  body.platform-ios .mobile-toolbar {
-    flex-direction: row;
-    align-items: center;
-  }
-
-  body.platform-ios .toolbar-primary {
-    flex-direction: row;
-    align-items: center;
-  }
-
-  body.platform-ios .mobile-catalog-grid {
+@media (min-width: 680px) {
+  body.platform-ios .queue-run-bar {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   body.platform-ios .mobile-detail-actions {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
-}
 
-@media (min-width: 1024px) {
   body.platform-ios .mobile-catalog-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
