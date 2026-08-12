@@ -173,6 +173,22 @@ body.platform-ios .catalog-back {
   margin-bottom: 10px;
 }
 
+body.platform-ios .mobile-catalog-library {
+  width: 100%;
+}
+
+body.platform-ios .catalog-library-head {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+body.platform-ios .library-sections {
+  display: grid;
+  gap: 12px;
+}
+
 body.platform-ios .mobile-progress-dock {
   flex: 0 0 auto;
   padding-bottom: var(--safe-bottom);

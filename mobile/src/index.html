@@ -100,6 +100,18 @@
         </div>
       </div>
 
+      <div id="catalog-library" class="catalog-library mobile-catalog-library" hidden>
+        <div class="catalog-library-head">
+          <div class="catalog-library-brand">
+            <button id="catalog-back-library-home" type="button" class="secondary catalog-back">← Home</button>
+            <h2>My Library</h2>
+            <p id="library-summary" class="library-summary catalog-library-summary">Scanning...</p>
+          </div>
+          <button id="refresh-library" type="button" class="secondary" title="Refresh list">Refresh</button>
+        </div>
+        <div id="library-sections" class="library-sections catalog-library-sections"></div>
+      </div>
+
       <div id="catalog-results" class="catalog-results" hidden>
         <button id="catalog-back-home" type="button" class="secondary catalog-back">← Back</button>
         <div class="catalog-results-head">
@@ -158,5 +170,6 @@
     <script src="js/stream-app-ios.js"></script>
     <script src="js/shell-ios-shim.js"></script>
     <script src="js/shell.js"></script>
+    <script src="js/shell-mobile-boot.js"></script>
   </body>
 </html>

@@ -30,17 +30,29 @@
 
   window.settingsApp = {
     async getSettings() {
-      const settings = await MovieEngine.getStorageSettings();
-      const local = await MovieEngine.getLocalMoviesPath();
-      return {
-        localVideoFolder: local.displayPath || local.path,
-        localSubfolder: settings.localSubfolder || "Movies",
-        nasHost: settings.nasHost || "",
-        nasShare: settings.nasShare || "",
-        nasPath: settings.nasPath || "",
-        nasVideoFolder: settings.nasVideoFolder || "",
-        nasUsername: settings.nasUsername || ""
-      };
+      try {
+        const settings = await MovieEngine.getStorageSettings();
+        const local = await MovieEngine.getLocalMoviesPath();
+        return {
+          localVideoFolder: local.displayPath || local.path,
+          localSubfolder: settings.localSubfolder || "Movies",
+          nasHost: settings.nasHost || "",
+          nasShare: settings.nasShare || "",
+          nasPath: settings.nasPath || "",
+          nasVideoFolder: settings.nasVideoFolder || "",
+          nasUsername: settings.nasUsername || ""
+        };
+      } catch (error) {
+        return {
+          localVideoFolder: "On My iPhone > Movie Stream Downloader > Movies",
+          localSubfolder: "Movies",
+          nasHost: "",
+          nasShare: "",
+          nasPath: "Videos",
+          nasVideoFolder: "",
+          nasUsername: ""
+        };
+      }
     },
     async getEnvironment() {
       return {

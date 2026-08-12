@@ -14,17 +14,30 @@
     const script = `(async () => {
       ${runner}
     })()`;
-    const response = await MovieEngine.scrapePage({ url, script, waitMs: 2600 });
-    return response?.result ?? response;
+    try {
+      const response = await MovieEngine.scrapePage({ url, script, waitMs: 2600 });
+      return response?.result ?? response;
+    } catch (error) {
+      console.warn("scrapePage failed", error);
+      return { ok: false, error: error?.message || "Could not scrape page." };
+    }
   }
 
   async function getStorageSummary() {
-    const local = await MovieEngine.getLocalMoviesPath();
-    const settings = await MovieEngine.getStorageSettings();
-    return {
-      localPath: local.displayPath || local.path,
-      nasPath: settings.nasVideoFolder || ""
-    };
+    try {
+      const local = await MovieEngine.getLocalMoviesPath();
+      const settings = await MovieEngine.getStorageSettings();
+      return {
+        localPath: local.displayPath || local.path,
+        nasPath: settings.nasVideoFolder || ""
+      };
+    } catch (error) {
+      console.warn("getStorageSummary failed", error);
+      return {
+        localPath: "On My iPhone > Movie Stream Downloader > Movies",
+        nasPath: ""
+      };
+    }
   }
 
   let tvShowPlan = null;
@@ -37,7 +50,16 @@
     diagnoseStreams: async () => ({ ok: true, entries: [] }),
     openStreamDebugLog: async () => ({ ok: true }),
     async getEnvironment() {
-      const storage = await getStorageSummary();
+      let storage = {
+        localPath: "On My iPhone > Movie Stream Downloader > Movies",
+        nasPath: ""
+      };
+      try {
+        storage = await getStorageSummary();
+      } catch (error) {
+        console.warn("getEnvironment storage failed", error);
+      }
+
       let siteUsername = null;
       try {
         const stored = await Preferences?.get({ key: "site_credentials" });

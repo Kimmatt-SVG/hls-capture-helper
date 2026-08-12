@@ -90,6 +90,7 @@ copyFile(path.join(root, "src", "js", "stream-app-ios.js"), path.join(www, "js",
 copyFile(path.join(root, "src", "js", "settings-ios.js"), path.join(www, "js", "settings-ios.js"));
 copyFile(path.join(root, "src", "js", "settings-page.js"), path.join(www, "js", "settings-page.js"));
 copyFile(path.join(root, "src", "js", "shell-ios-shim.js"), path.join(www, "js", "shell-ios-shim.js"));
+copyFile(path.join(root, "src", "js", "shell-mobile-boot.js"), path.join(www, "js", "shell-mobile-boot.js"));
 copyFile(path.join(desktop, "shell.js"), path.join(www, "js", "shell.js"));
 writeScraperBundle();
 
