@@ -49,7 +49,7 @@ public class MovieEnginePlugin: CAPPlugin, CAPBridgedPlugin {
     ]
 
     private let settingsKey = "movie_engine_storage_settings"
-    private var cachedClient: SMB2Manager?
+    private var cachedClient: AMSMB2?
     private var scrapeWebView: WKWebView?
     private var scrapeDelegate: ScrapeNavigationDelegate?
 
@@ -160,7 +160,7 @@ public class MovieEnginePlugin: CAPPlugin, CAPBridgedPlugin {
         return "smb://\(settings.nasHost)/\(settings.nasShare)/\(remotePath)"
     }
 
-    private func smbClient(settings: StorageSettingsPayload, completion: @escaping (Result<SMB2Manager, Error>) -> Void) {
+    private func smbClient(settings: StorageSettingsPayload, completion: @escaping (Result<AMSMB2, Error>) -> Void) {
         let host = settings.nasHost.trimmingCharacters(in: .whitespacesAndNewlines)
         let share = settings.nasShare.trimmingCharacters(in: .whitespacesAndNewlines)
         let username = settings.nasUsername.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -188,7 +188,12 @@ public class MovieEnginePlugin: CAPPlugin, CAPBridgedPlugin {
         }
 
         let credential = URLCredential(user: username, password: password, persistence: .forSession)
-        let client = SMB2Manager(url: url, credential: credential)
+        guard let client = AMSMB2(url: url, credential: credential) else {
+            completion(.failure(NSError(domain: "MovieEngine", code: 4, userInfo: [
+                NSLocalizedDescriptionKey: "Invalid SMB URL."
+            ])))
+            return
+        }
 
         client.connectShare(name: share) { error in
             if let error = error {

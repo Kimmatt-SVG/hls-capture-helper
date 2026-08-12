@@ -11,4 +11,8 @@ Pod::Spec.new do |s|
   s.dependency "Capacitor"
   s.dependency "AMSMB2", "~> 2.7.1"
   s.swift_version = "5.9"
+  s.pod_target_xcconfig = {
+    "SWIFT_INCLUDE_PATHS" => '$(inherited) "${PODS_ROOT}/AMSMB2/libsmb2/include" "${PODS_ROOT}/AMSMB2/libsmb2/**"',
+    "OTHER_SWIFT_FLAGS" => '$(inherited) -Xcc -fmodule-map-file="${PODS_ROOT}/AMSMB2/libsmb2/include/module.modulemap"'
+  }
 end
