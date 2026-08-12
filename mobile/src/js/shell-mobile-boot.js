@@ -1,6 +1,15 @@
 (function bootMobileShell() {
   if (!document.body.classList.contains("platform-ios")) return;
 
+  function applyMobileChrome(view) {
+    document.body.dataset.catalogView = view;
+    document.body.classList.toggle("catalog-subview", view !== "home");
+    const searchForm = document.getElementById("toolbar-search-form");
+    if (searchForm) searchForm.hidden = view !== "home";
+    const openLibrary = document.getElementById("open-library");
+    if (openLibrary) openLibrary.hidden = view === "library";
+  }
+
   function showCatalogViewFallback(view) {
     const home = document.getElementById("catalog-home");
     const library = document.getElementById("catalog-library");
@@ -13,6 +22,18 @@
     if (library) library.hidden = view !== "library";
     if (results) results.hidden = view !== "results";
     if (detail) detail.hidden = view !== "detail";
+    applyMobileChrome(view);
+  }
+
+  function syncCatalogViewFromDom() {
+    const library = document.getElementById("catalog-library");
+    const results = document.getElementById("catalog-results");
+    const detail = document.getElementById("catalog-detail");
+    let view = "home";
+    if (library && !library.hidden) view = "library";
+    else if (detail && !detail.hidden) view = "detail";
+    else if (results && !results.hidden) view = "results";
+    applyMobileChrome(view);
   }
 
   function bindNavigation() {
@@ -54,6 +75,15 @@
   }
 
   bindNavigation();
+
+  ["catalog-library", "catalog-results", "catalog-detail", "catalog-home"].forEach((id) => {
+    const node = document.getElementById(id);
+    if (!node || typeof MutationObserver === "undefined") return;
+    const observer = new MutationObserver(syncCatalogViewFromDom);
+    observer.observe(node, { attributes: true, attributeFilter: ["hidden"] });
+  });
+
+  syncCatalogViewFromDom();
 
   window.addEventListener("unhandledrejection", (event) => {
     const message = event.reason?.message || String(event.reason || "Unknown error");

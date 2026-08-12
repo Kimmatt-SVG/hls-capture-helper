@@ -64,6 +64,10 @@ body.platform-ios .toolbar-search {
   flex: none;
 }
 
+body.platform-ios .toolbar-search[hidden] {
+  display: none !important;
+}
+
 body.platform-ios .toolbar-search input {
   width: 100%;
   min-height: 44px;
@@ -88,6 +92,32 @@ body.platform-ios .queue-run-bar button {
 
 body.platform-ios .mobile-status-bar {
   display: none !important;
+}
+
+body.platform-ios.catalog-subview .toolbar-search,
+body.platform-ios[data-catalog-view="library"] .toolbar-search,
+body.platform-ios[data-catalog-view="results"] .toolbar-search,
+body.platform-ios[data-catalog-view="detail"] .toolbar-search,
+body.platform-ios:has(#catalog-library:not([hidden])) .toolbar-search,
+body.platform-ios:has(#catalog-results:not([hidden])) .toolbar-search,
+body.platform-ios:has(#catalog-detail:not([hidden])) .toolbar-search {
+  display: none !important;
+}
+
+body.platform-ios.catalog-subview #open-library,
+body.platform-ios[data-catalog-view="library"] #open-library,
+body.platform-ios:has(#catalog-library:not([hidden])) #open-library {
+  display: none !important;
+}
+
+body.platform-ios[data-catalog-view="library"] .mobile-toolbar,
+body.platform-ios[data-catalog-view="results"] .mobile-toolbar,
+body.platform-ios[data-catalog-view="detail"] .mobile-toolbar,
+body.platform-ios:has(#catalog-library:not([hidden])) .mobile-toolbar,
+body.platform-ios:has(#catalog-results:not([hidden])) .mobile-toolbar,
+body.platform-ios:has(#catalog-detail:not([hidden])) .mobile-toolbar {
+  margin-bottom: 0;
+  padding-bottom: 10px;
 }
 
 body.platform-ios .search-panel {
