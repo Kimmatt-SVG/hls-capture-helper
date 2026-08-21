@@ -34,7 +34,18 @@ contextBridge.exposeInMainWorld("streamApp", {
   clearDownloadQueue: () => ipcRenderer.invoke("clear-download-queue"),
   startDownloadQueue: (destination = "local") => ipcRenderer.invoke("start-download-queue", destination),
   stopDownloadQueue: () => ipcRenderer.invoke("stop-download-queue"),
-  scanTvShow: () => ipcRenderer.invoke("scan-tv-show"),
+  discoverTvSeasons: (url) => ipcRenderer.invoke("discover-tv-seasons", url),
+  prepareTvShow: (url, season) =>
+    ipcRenderer.invoke("prepare-tv-show", { url, season: season ?? null }),
+  scanTvShow: (url, season) =>
+    ipcRenderer.invoke(
+      "scan-tv-show",
+      url
+        ? { url, season: season ?? null }
+        : season != null
+          ? { season }
+          : null
+    ),
   getTvShowPlan: () => ipcRenderer.invoke("get-tv-show-plan"),
   clearTvShowPlan: () => ipcRenderer.invoke("clear-tv-show-plan"),
   addTvPlanToQueue: (destination = "local") => ipcRenderer.invoke("add-tv-plan-to-queue", destination),

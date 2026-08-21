@@ -72,6 +72,10 @@
 
             <div class="queue-tools">
               <div class="queue-tools-label">Add to queue</div>
+              <div id="queue-tv-season-row" class="queue-tv-season-row" hidden>
+                <label for="queue-tv-season-select">Season</label>
+                <select id="queue-tv-season-select" class="queue-tv-season-select"></select>
+              </div>
               <div class="download-queue-actions home-queue-actions">
                 <button id="add-search-to-queue" type="button" class="secondary" title="Add all movies from the current catalog search">
                   Add Search Movies
@@ -159,6 +163,22 @@
             <p id="catalog-detail-year" class="catalog-detail-year"></p>
             <h2 id="catalog-detail-title">Movie</h2>
             <p id="catalog-detail-status" class="catalog-detail-status"></p>
+
+            <div id="catalog-tv-panel" class="catalog-tv-panel" hidden>
+              <div class="catalog-tv-controls">
+                <label class="catalog-tv-field" for="catalog-tv-season-select">
+                  <span>Season</span>
+                  <select id="catalog-tv-season-select" class="catalog-tv-season-select"></select>
+                </label>
+                <label class="catalog-tv-field" for="catalog-tv-episode-select">
+                  <span>Episode</span>
+                  <select id="catalog-tv-episode-select" class="catalog-tv-episode-select"></select>
+                </label>
+              </div>
+              <div class="catalog-tv-episode-summary" id="catalog-tv-episode-summary"></div>
+              <ul id="catalog-tv-episode-list" class="catalog-tv-episode-list" aria-label="Episodes in selected season"></ul>
+            </div>
+
             <div class="catalog-detail-actions">
               <button id="catalog-download-local" type="button" class="primary">Download → PC</button>
               <button id="catalog-download-nas" type="button" class="accent">Save to NAS</button>

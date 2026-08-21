@@ -60,6 +60,11 @@ const catalogDetailPoster = document.getElementById("catalog-detail-poster");
 const catalogDetailTitle = document.getElementById("catalog-detail-title");
 const catalogDetailYear = document.getElementById("catalog-detail-year");
 const catalogDetailStatus = document.getElementById("catalog-detail-status");
+const catalogTvPanel = document.getElementById("catalog-tv-panel");
+const catalogTvSeasonSelect = document.getElementById("catalog-tv-season-select");
+const catalogTvEpisodeSelect = document.getElementById("catalog-tv-episode-select");
+const catalogTvEpisodeSummary = document.getElementById("catalog-tv-episode-summary");
+const catalogTvEpisodeList = document.getElementById("catalog-tv-episode-list");
 const catalogDownloadLocal = document.getElementById("catalog-download-local");
 const catalogDownloadNas = document.getElementById("catalog-download-nas");
 const catalogAddQueue = document.getElementById("catalog-add-queue");
@@ -97,6 +102,8 @@ const tvShowSection = document.getElementById("tv-show-section");
 const tvShowSummary = document.getElementById("tv-show-summary");
 const tvShowEpisodeList = document.getElementById("tv-show-episode-list");
 const scanTvShowButton = document.getElementById("scan-tv-show");
+const queueTvSeasonRow = document.getElementById("queue-tv-season-row");
+const queueTvSeasonSelect = document.getElementById("queue-tv-season-select");
 const addTvToQueueButton = document.getElementById("add-tv-to-queue");
 const clearTvShowPlanButton = document.getElementById("clear-tv-show-plan");
 const browseSiteForTvButton = document.getElementById("browse-site-for-tv");
@@ -112,6 +119,9 @@ let librarySyncActive = false;
 let queueActive = false;
 let tvShowActive = false;
 let tvShowPlan = null;
+let catalogTvSeasonOptions = [];
+let catalogTvEpisodeOptions = [];
+let catalogTvScanToken = 0;
 let siteBrowseMode = false;
 let hideMovieDownloader = false;
 let catalogMode = false;
@@ -341,6 +351,249 @@ function renderCatalogGrid(movies, query, counts = null) {
   window.shellMotion?.bindPosterInteractions?.(cards);
 }
 
+function renderSeasonSelect(select, seasons, selectedSeason = null) {
+  if (!select) return selectedSeason;
+  select.replaceChildren();
+  const list = Array.isArray(seasons) ? seasons : [];
+  for (const season of list) {
+    const option = document.createElement("option");
+    option.value = String(season.number);
+    option.textContent = season.label || `Season ${season.number}`;
+    select.appendChild(option);
+  }
+  if (!list.length) return null;
+  const preferred =
+    list.find((season) => season.number === selectedSeason)?.number ?? list[0].number;
+  select.value = String(preferred);
+  return preferred;
+}
+
+function clearCatalogTvEpisodePanel(message = "No episodes scanned yet.") {
+  catalogTvEpisodeOptions = [];
+  if (catalogTvEpisodeSelect) catalogTvEpisodeSelect.replaceChildren();
+  if (catalogTvEpisodeSummary) catalogTvEpisodeSummary.textContent = "";
+  if (catalogTvEpisodeList) {
+    catalogTvEpisodeList.innerHTML = `<li class="catalog-tv-empty">${message}</li>`;
+  }
+}
+
+function renderCatalogTvEpisodePanel(plan = null) {
+  const episodes = Array.isArray(plan?.episodes) ? plan.episodes : [];
+  catalogTvEpisodeOptions = episodes;
+  const season = plan?.season || getSelectedCatalogTvSeason() || 1;
+
+  if (catalogTvEpisodeSelect) {
+    catalogTvEpisodeSelect.replaceChildren();
+    const allOption = document.createElement("option");
+    allOption.value = "all";
+    allOption.textContent = episodes.length
+      ? `All episodes (${episodes.length})`
+      : "All episodes";
+    catalogTvEpisodeSelect.appendChild(allOption);
+
+    for (const episode of episodes) {
+      const option = document.createElement("option");
+      const code = `S${String(episode.season || season).padStart(2, "0")}E${String(
+        episode.episode || 0
+      ).padStart(2, "0")}`;
+      option.value = String(episode.episode || "");
+      option.textContent = `${code} · ${episode.title || "Episode"}`;
+      catalogTvEpisodeSelect.appendChild(option);
+    }
+    catalogTvEpisodeSelect.value = "all";
+  }
+
+  if (catalogTvEpisodeSummary) {
+    catalogTvEpisodeSummary.textContent = episodes.length
+      ? `Season ${season} · ${episodes.length} episode${episodes.length === 1 ? "" : "s"} ready`
+      : `Season ${season} · no episodes found yet`;
+  }
+
+  if (catalogTvEpisodeList) {
+    if (!episodes.length) {
+      catalogTvEpisodeList.innerHTML =
+        '<li class="catalog-tv-empty">No episodes found for this season.</li>';
+    } else {
+      catalogTvEpisodeList.replaceChildren();
+      for (const episode of episodes) {
+        const item = document.createElement("li");
+        const code = document.createElement("span");
+        code.className = "ep-code";
+        code.textContent = `S${String(episode.season || season).padStart(2, "0")}E${String(
+          episode.episode || 0
+        ).padStart(2, "0")}`;
+        const title = document.createElement("span");
+        title.className = "ep-title";
+        title.textContent = episode.title || "Episode";
+        item.append(code, title);
+        catalogTvEpisodeList.appendChild(item);
+      }
+    }
+  }
+}
+
+function renderCatalogTvSeasonPicker(seasons = [], selectedSeason = null) {
+  catalogTvSeasonOptions = Array.isArray(seasons) ? seasons : [];
+  if (!catalogTvPanel || !catalogTvSeasonSelect) return null;
+
+  if (!catalogTvSeasonOptions.length) {
+    catalogTvPanel.hidden = true;
+    catalogTvSeasonSelect.replaceChildren();
+    clearCatalogTvEpisodePanel();
+    return null;
+  }
+
+  catalogTvPanel.hidden = false;
+  return renderSeasonSelect(catalogTvSeasonSelect, catalogTvSeasonOptions, selectedSeason);
+}
+
+function renderQueueTvSeasonPicker(seasons = [], selectedSeason = null) {
+  const list = Array.isArray(seasons) ? seasons : [];
+  if (!queueTvSeasonRow || !queueTvSeasonSelect) return null;
+
+  if (!list.length) {
+    queueTvSeasonRow.hidden = true;
+    queueTvSeasonSelect.replaceChildren();
+    return null;
+  }
+
+  queueTvSeasonRow.hidden = false;
+  return renderSeasonSelect(queueTvSeasonSelect, list, selectedSeason);
+}
+
+function getSelectedCatalogTvSeason() {
+  const parsed = Number.parseInt(catalogTvSeasonSelect?.value, 10);
+  if (parsed > 0) return parsed;
+  const fallback = catalogTvSeasonOptions[0]?.number;
+  return fallback > 0 ? fallback : 1;
+}
+
+function getSelectedQueueTvSeason() {
+  const parsed = Number.parseInt(queueTvSeasonSelect?.value, 10);
+  if (parsed > 0) return parsed;
+  const fallback = catalogTvSeasonOptions[0]?.number;
+  return fallback > 0 ? fallback : 1;
+}
+
+async function scanCatalogTvSeason(movie, season, { token = catalogTvScanToken } = {}) {
+  if (!movie?.movieUrl) return { ok: false, error: "Missing show URL." };
+  const title = movie.title || "TV show";
+  if (catalogDetailStatus) {
+    catalogDetailStatus.textContent = `Scanning season ${season} episodes...`;
+  }
+  clearCatalogTvEpisodePanel(`Scanning season ${season}...`);
+
+  const result = await window.streamApp.prepareTvShow(movie.movieUrl, season);
+  if (token !== catalogTvScanToken) return { ok: false, cancelled: true };
+
+  if (result.seasons?.length) {
+    renderCatalogTvSeasonPicker(result.seasons, result.season || season);
+    renderQueueTvSeasonPicker(result.seasons, result.season || season);
+  }
+
+  if (!result.ok || !result.plan) {
+    clearCatalogTvEpisodePanel(result.error || "Could not scan episodes.");
+    if (catalogDetailStatus) {
+      catalogDetailStatus.textContent = result.error || "Episode scan failed.";
+    }
+    return result;
+  }
+
+  renderTvShowPlan(result.plan);
+  renderCatalogTvEpisodePanel(result.plan);
+  const count = result.plan.episodes?.length || 0;
+  if (catalogDetailStatus) {
+    catalogDetailStatus.textContent = `${count} episode${count === 1 ? "" : "s"} found for season ${
+      result.plan.season || season
+    }.`;
+  }
+  appendActivityLog(
+    "success",
+    `Scanned "${result.plan.showTitle || title}" season ${result.plan.season || season} (${count} episode${
+      count === 1 ? "" : "s"
+    })`
+  );
+  return result;
+}
+
+async function loadCatalogTvShowLibrary(movie) {
+  if (!isCatalogTvItem(movie) || !movie?.movieUrl) {
+    renderCatalogTvSeasonPicker([]);
+    renderQueueTvSeasonPicker([]);
+    return { ok: false };
+  }
+
+  const token = ++catalogTvScanToken;
+  if (catalogTvPanel) catalogTvPanel.hidden = false;
+  if (catalogDetailStatus) {
+    catalogDetailStatus.textContent = "Finding seasons and scanning episodes...";
+  }
+  clearCatalogTvEpisodePanel("Loading seasons and episodes...");
+
+  try {
+    // Scan the season from the catalog URL first (reliable). Season 1 is only used
+    // when the URL has no season number.
+    const result = await Promise.race([
+      window.streamApp.prepareTvShow(movie.movieUrl, null),
+      new Promise((resolve) =>
+        setTimeout(
+          () =>
+            resolve({
+              ok: false,
+              error: "TV show scan timed out."
+            }),
+          60_000
+        )
+      )
+    ]);
+
+    if (token !== catalogTvScanToken) return { ok: false, cancelled: true };
+
+    if (!result.ok) {
+      renderCatalogTvSeasonPicker(result.seasons || []);
+      renderQueueTvSeasonPicker(result.seasons || []);
+      clearCatalogTvEpisodePanel(result.error || "Could not scan this show.");
+      if (catalogDetailStatus) {
+        catalogDetailStatus.textContent = result.error || "Could not scan this show.";
+      }
+      appendActivityLog("error", result.error || "Could not scan this show.");
+      return result;
+    }
+
+    const selected = renderCatalogTvSeasonPicker(
+      result.seasons || [],
+      result.season || result.plan?.season
+    );
+    renderQueueTvSeasonPicker(result.seasons || [], selected);
+    renderTvShowPlan(result.plan);
+    renderCatalogTvEpisodePanel(result.plan);
+
+    const count = result.plan?.episodes?.length || 0;
+    if (catalogDetailStatus) {
+      catalogDetailStatus.textContent = `${count} episode${count === 1 ? "" : "s"} found for season ${
+        result.plan?.season || selected
+      }.`;
+    }
+    appendActivityLog(
+      "success",
+      `Loaded "${result.plan?.showTitle || movie.title}" season ${result.plan?.season || selected} (${count} episode${
+        count === 1 ? "" : "s"
+      })`
+    );
+    return result;
+  } catch (error) {
+    if (token !== catalogTvScanToken) return { ok: false, cancelled: true };
+    renderCatalogTvSeasonPicker([]);
+    renderQueueTvSeasonPicker([]);
+    clearCatalogTvEpisodePanel(error.message || "Scan failed.");
+    if (catalogDetailStatus) {
+      catalogDetailStatus.textContent = error.message || "TV scan failed.";
+    }
+    appendActivityLog("error", error.message || "TV scan failed.");
+    return { ok: false, error: error.message || "TV scan failed." };
+  }
+}
+
 function updateCatalogDetailActions(movie) {
   const isTv = isCatalogTvItem(movie);
   if (catalogDownloadLocal) {
@@ -351,8 +604,49 @@ function updateCatalogDetailActions(movie) {
     catalogDownloadNas.hidden = isTv;
   }
   if (catalogAddQueue) {
-    catalogAddQueue.textContent = isTv ? "Scan Episodes" : "Add to Queue";
+    catalogAddQueue.textContent = isTv ? "Add Season to Queue" : "Add to Queue";
   }
+  if (!isTv) {
+    if (catalogTvPanel) catalogTvPanel.hidden = true;
+    renderCatalogTvSeasonPicker([]);
+    renderQueueTvSeasonPicker([]);
+    clearCatalogTvEpisodePanel();
+  } else if (catalogTvPanel) {
+    catalogTvPanel.hidden = false;
+  }
+}
+
+async function queueSelectedCatalogTvSeason() {
+  if (!selectedCatalogMovie?.movieUrl) {
+    appendActivityLog("error", "Select a TV show from the catalog first.");
+    return { ok: false };
+  }
+
+  const season = getSelectedCatalogTvSeason();
+  if (!tvShowPlan?.episodes?.length || Number(tvShowPlan.season) !== Number(season)) {
+    const scan = await scanCatalogTvSeason(selectedCatalogMovie, season);
+    if (!scan.ok) return scan;
+  }
+
+  const result = await window.streamApp.addTvPlanToQueue("local");
+  if (!result.ok) {
+    appendActivityLog("error", result.error || "Could not add episodes to queue.");
+    if (catalogDetailStatus) {
+      catalogDetailStatus.textContent = result.error || "Could not add to queue.";
+    }
+    return result;
+  }
+
+  const added = result.added?.length || tvShowPlan?.episodes?.length || 0;
+  appendActivityLog(
+    "success",
+    `Added ${added} episode${added === 1 ? "" : "s"} from season ${season} to queue`
+  );
+  if (catalogDetailStatus) {
+    catalogDetailStatus.textContent = `Added ${added} episode${added === 1 ? "" : "s"} to the download queue.`;
+  }
+  window.shellMotion?.pulseQueueChrome();
+  return result;
 }
 
 function renderCatalogDetail(movie) {
@@ -364,7 +658,7 @@ function renderCatalogDetail(movie) {
   }
   if (catalogDetailStatus) {
     catalogDetailStatus.textContent = isTv
-      ? "Open the show page, then scan a season into the shared queue."
+      ? "Loading seasons and episodes..."
       : "Ready to download or add to queue.";
   }
   if (catalogDetailPoster) {
@@ -403,10 +697,12 @@ async function openCatalogMovie(movie) {
   }
 
   streamStatus.textContent = `Selected “${selectedCatalogMovie.title}”`;
+  if (isCatalogTvItem(selectedCatalogMovie)) {
+    await loadCatalogTvShowLibrary(selectedCatalogMovie);
+    return;
+  }
   if (catalogDetailStatus) {
-    catalogDetailStatus.textContent = isCatalogTvItem(selectedCatalogMovie)
-      ? "Open the show page, then scan a season into the shared queue."
-      : "Ready to download or add to queue.";
+    catalogDetailStatus.textContent = "Ready to download or add to queue.";
   }
 }
 
@@ -421,8 +717,9 @@ async function openSelectedCatalogTvShow() {
     appendActivityLog("error", result.error || "Could not open the show page.");
     return;
   }
-  streamStatus.textContent = `Opened “${selectedCatalogMovie.title}” — pick a season, then Scan Current Season.`;
+  streamStatus.textContent = `Opened “${selectedCatalogMovie.title}” — pick a season in the catalog, or scan from here.`;
   appendActivityLog("info", `Opened TV show “${selectedCatalogMovie.title}” for scanning`);
+  await loadCatalogTvShowLibrary(selectedCatalogMovie);
 }
 
 async function downloadSelectedCatalogMovie(destination) {
@@ -463,9 +760,7 @@ async function addSelectedCatalogMovieToQueue(destination = "local") {
     return { ok: false };
   }
   if (isCatalogTvItem(selectedCatalogMovie)) {
-    await openSelectedCatalogTvShow();
-    appendActivityLog("info", "On the show page, use Scan Current Season, then Add Episodes to Queue.");
-    return { ok: true };
+    return queueSelectedCatalogTvSeason();
   }
 
   const result = await window.streamApp.addMovieToQueue({
@@ -2008,12 +2303,15 @@ window.streamApp.onPageLoadSucceeded(() => {
 });
 
 window.streamApp.onBrowserContentVisible(() => {
-  if (catalogMode) {
+  if (catalogMode && !siteBrowseMode) {
     hideBlockedPanel();
     return;
   }
   hideSearchPanel();
   hideBlockedPanel();
+  if (siteBrowseMode && selectedCatalogMovie && isCatalogTvItem(selectedCatalogMovie)) {
+    loadCatalogTvShowLibrary(selectedCatalogMovie);
+  }
 });
 
 window.streamApp.onNavigationStateChanged((state) => {
@@ -2026,11 +2324,6 @@ window.streamApp.onRedirectBlocked((details) => {
 
 window.streamApp.onShowSearchLanding(() => {
   hideBlockedPanel();
-  if (catalogMode) {
-    catalogMovies = [];
-    selectedCatalogMovie = null;
-    showCatalogView("home");
-  }
   showSearchPanel();
 });
 
@@ -2148,6 +2441,41 @@ if (catalogDownloadNas) {
 }
 if (catalogAddQueue) {
   catalogAddQueue.addEventListener("click", () => addSelectedCatalogMovieToQueue("local"));
+}
+if (catalogTvSeasonSelect) {
+  catalogTvSeasonSelect.addEventListener("change", async () => {
+    const season = getSelectedCatalogTvSeason();
+    if (queueTvSeasonSelect && !queueTvSeasonRow?.hidden) {
+      queueTvSeasonSelect.value = String(season);
+    }
+    if (!selectedCatalogMovie || !isCatalogTvItem(selectedCatalogMovie)) return;
+    const token = ++catalogTvScanToken;
+    await scanCatalogTvSeason(selectedCatalogMovie, season, { token });
+  });
+}
+if (catalogTvEpisodeSelect) {
+  catalogTvEpisodeSelect.addEventListener("change", () => {
+    const value = catalogTvEpisodeSelect.value;
+    if (!catalogTvEpisodeList) return;
+    const items = catalogTvEpisodeList.querySelectorAll("li");
+    items.forEach((item) => item.classList.remove("is-active"));
+    if (value === "all") return;
+    const match = [...items].find((item) =>
+      item.querySelector(".ep-code")?.textContent?.endsWith(`E${String(value).padStart(2, "0")}`)
+    );
+    if (match) {
+      match.classList.add("is-active");
+      match.scrollIntoView({ block: "nearest" });
+    }
+  });
+}
+if (queueTvSeasonSelect) {
+  queueTvSeasonSelect.addEventListener("change", () => {
+    const season = getSelectedQueueTvSeason();
+    if (catalogTvSeasonSelect && catalogTvPanel && !catalogTvPanel.hidden) {
+      catalogTvSeasonSelect.value = String(season);
+    }
+  });
 }
 
 async function startQueueDownload(destination) {
@@ -2362,18 +2690,22 @@ if (backToCatalogButton) {
 }
 
 scanTvShowButton.addEventListener("click", async () => {
-  appendActivityLog("info", "Scanning the current season for episodes...");
-  const result = await window.streamApp.scanTvShow();
+  const season = queueTvSeasonSelect && !queueTvSeasonRow?.hidden ? getSelectedQueueTvSeason() : null;
+  appendActivityLog(
+    "info",
+    season ? `Scanning season ${season} for episodes...` : "Scanning the current season for episodes..."
+  );
+  const result = await window.streamApp.scanTvShow(null, season);
   if (!result.ok) {
     appendActivityLog("error", result.error);
     return;
   }
 
   renderTvShowPlan(result.plan);
-  const season = result.plan.season || 1;
+  const scannedSeason = result.plan.season || season || 1;
   appendActivityLog(
     "success",
-    `Scanned "${result.plan.showTitle}" season ${season} (${result.plan.episodes.length} episode${result.plan.episodes.length === 1 ? "" : "s"})`
+    `Scanned "${result.plan.showTitle}" season ${scannedSeason} (${result.plan.episodes.length} episode${result.plan.episodes.length === 1 ? "" : "s"})`
   );
 });
 

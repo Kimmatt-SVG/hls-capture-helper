@@ -48,7 +48,7 @@ const {
   scrapeMovieDetail,
   buildTornadoSearchScraperScript
 } = require("./lib/tornado-search-scraper");
-const { setupTvShowScraper, scrapeTvShowFromPage } = require("./lib/tv-show-scraper");
+const { setupTvShowScraper, scrapeTvShowFromPage, discoverTvSeasonsFromPage } = require("./lib/tv-show-scraper");
 const { runTvShowDownload } = require("./lib/tv-show-runner");
 const {
   canonicalContentUrl,
@@ -57,7 +57,14 @@ const {
   isTvShowPageUrl,
   isDownloadableContentUrl,
   episodeFileLabel,
-  safeShowFolderName
+  safeShowFolderName,
+  buildSeasonPageUrl,
+  showBaseSlugFromUrl,
+  seasonNumberFromUrl,
+  buildSeasonListFromUrl,
+  toSeasonHubUrl,
+  parseTornadoSeriesUrl,
+  isWatchingEpisodeUrl
 } = require("./lib/tv-url-utils");
 
 const appProfile = getSiteProfile();
@@ -2318,42 +2325,378 @@ ipcMain.handle("stop-download-queue", async () => {
   return { ok: true };
 });
 
-ipcMain.handle("scan-tv-show", async () => {
-  const contents = browserView?.webContents;
-  if (!contents || contents.isDestroyed()) {
-    return { ok: false, error: "Browser is not ready." };
-  }
-
-  const scan = await scrapeTvShowFromPage(contents);
-  if (!scan.ok) {
+async function applyTvShowScan(scan, pageUrl = "") {
+  if (!scan?.ok) {
     return {
       ok: false,
       error:
-        scan.error ||
-        (isAniwaveUrl(contents.getURL() || "")
+        scan?.error ||
+        (isAniwaveUrl(pageUrl)
           ? "Could not find episodes on this Aniwave page. Open a watch URL like /watch/show-name/ep-1, then scan again."
           : "Could not find episodes for this season. Open a specific season page with its episode list visible, then scan again.")
     };
   }
 
-  const pageUrl = contents.getURL() || "";
+  const baseSlug = showBaseSlugFromUrl(pageUrl) || showBaseSlugFromUrl(scan.showUrl);
+  const episodes = (scan.episodes || []).filter((episode) => {
+    if (!episode?.url) return false;
+    if (!baseSlug) return true;
+    const episodeSlug = showBaseSlugFromUrl(episode.url);
+    return !episodeSlug || episodeSlug.toLowerCase() === baseSlug.toLowerCase();
+  });
+
+  if (!episodes.length) {
+    return {
+      ok: false,
+      error:
+        "Could not find episodes that match this show. Open the season page and scan again once the episode list is visible."
+    };
+  }
+
   tvShowPlan = {
     showTitle: scan.showTitle,
-    season: scan.season || scan.episodes[0]?.season || 1,
+    season: scan.season || episodes[0]?.season || 1,
     showUrl: scan.showUrl || pageUrl,
     posterUrl: scan.posterUrl || null,
-    episodes: scan.episodes,
+    episodes,
     scannedAt: Date.now(),
     notes: scan.notes || []
   };
   notifyTvShowUpdate({ phase: "scanned" });
   queueDebug("tv-scan", `Scanned ${scan.showTitle} season ${tvShowPlan.season}`, {
-    episodeCount: scan.episodeCount,
+    episodeCount: episodes.length,
     season: tvShowPlan.season,
-    showUrl: tvShowPlan.showUrl
+    showUrl: tvShowPlan.showUrl,
+    showSlug: baseSlug
   });
 
   return { ok: true, plan: tvShowPlan };
+}
+
+async function withTimeout(promise, timeoutMs, label = "Operation") {
+  let timer = null;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise((_, reject) => {
+        timer = setTimeout(
+          () => reject(new Error(`${label} timed out after ${Math.round(timeoutMs / 1000)}s.`)),
+          timeoutMs
+        );
+      })
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+async function loadTvShowPageHidden(url, options = {}) {
+  const contents = browserView?.webContents;
+  if (!contents || contents.isDestroyed()) {
+    return { ok: false, error: "Browser is not ready." };
+  }
+
+  const targetUrl = canonicalContentUrl(url) || String(url || "").trim();
+  if (!targetUrl) {
+    return { ok: false, error: "Missing TV show URL." };
+  }
+
+  if (isCatalogMode()) {
+    catalogBrowserLocked = true;
+    hideBrowserView();
+  }
+
+  const timeoutMs = Number(options.timeoutMs) || 90_000;
+  const light = Boolean(options.light);
+
+  try {
+    if (light) {
+      await loadUrlAndWait(contents, targetUrl, {
+        timeoutMs,
+        settleMs: Number(options.settleMs) || 900
+      });
+    } else {
+      await loadContentPageForDownload(targetUrl, timeoutMs);
+    }
+    return { ok: true, url: contents.getURL() || targetUrl };
+  } catch (error) {
+    return { ok: false, error: error.message || String(error) };
+  } finally {
+    if (isCatalogMode() && catalogBrowserLocked) {
+      hideBrowserView();
+    }
+  }
+}
+
+async function discoverTvSeasonsFromUrl(url) {
+  const prepared = await prepareTvShowFromUrl(url, null, { scanEpisodes: false });
+  if (!prepared.ok) return prepared;
+  return {
+    ok: true,
+    showTitle: prepared.showTitle,
+    showUrl: prepared.showUrl,
+    posterUrl: prepared.posterUrl,
+    seasons: prepared.seasons,
+    seasonCount: prepared.seasons?.length || 0,
+    showSlug: prepared.showSlug,
+    source: prepared.source
+  };
+}
+
+function mergeSeasonLists(urlSeasons = [], scraped = [], pageSlug = null) {
+  const byNumber = new Map();
+  for (const season of urlSeasons) {
+    if (!season?.number) continue;
+    byNumber.set(season.number, {
+      number: season.number,
+      label: season.label || `Season ${season.number}`,
+      url: season.url || null
+    });
+  }
+
+  for (const season of scraped) {
+    if (!season?.number) continue;
+    if (season.url && pageSlug) {
+      const seasonSlug = showBaseSlugFromUrl(season.url);
+      if (seasonSlug && seasonSlug.toLowerCase() !== pageSlug.toLowerCase()) continue;
+    }
+    const existing = byNumber.get(season.number);
+    byNumber.set(season.number, {
+      number: season.number,
+      label: season.label || existing?.label || `Season ${season.number}`,
+      url: season.url || existing?.url || null
+    });
+  }
+
+  return [...byNumber.values()].sort((a, b) => a.number - b.number);
+}
+
+async function prepareTvShowFromUrl(url, season = null, options = {}) {
+  const scanEpisodes = options.scanEpisodes !== false;
+  const targetUrl = canonicalContentUrl(url) || String(url || "").trim();
+  if (!targetUrl) return { ok: false, error: "Missing TV show URL." };
+
+  const hubUrl = toSeasonHubUrl(targetUrl) || targetUrl;
+  const urlSeasons = buildSeasonListFromUrl(targetUrl);
+  const baseSlug = showBaseSlugFromUrl(targetUrl);
+  const urlSeasonNumber = seasonNumberFromUrl(targetUrl);
+
+  const loaded = await loadTvShowPageHidden(hubUrl, {
+    light: true,
+    timeoutMs: Number(options.timeoutMs) || 45_000,
+    settleMs: Number(options.settleMs) || 1200
+  });
+  if (!loaded.ok) return loaded;
+
+  const contents = browserView?.webContents;
+  if (!contents || contents.isDestroyed()) {
+    return { ok: false, error: "Browser is not ready." };
+  }
+
+  let pageUrl = contents.getURL() || loaded.url;
+  let discovery = { ok: false, seasons: [] };
+
+  try {
+    discovery = await withTimeout(discoverTvSeasonsFromPage(contents), 8_000, "Season discovery");
+  } catch (error) {
+    queueDebug("tv-seasons-fail", error.message || String(error), { url: targetUrl });
+  }
+
+  const pageSlug = showBaseSlugFromUrl(pageUrl) || baseSlug;
+  let seasons = mergeSeasonLists(urlSeasons, discovery.seasons || [], pageSlug);
+
+  if (!seasons.length) {
+    const fallbackSeason = urlSeasonNumber || 1;
+    seasons = [
+      {
+        number: fallbackSeason,
+        label: `Season ${fallbackSeason}`,
+        url: toSeasonHubUrl(pageUrl) || pageUrl
+      }
+    ];
+  }
+
+  const requestedSeason =
+    Number.isFinite(Number(season)) && Number(season) > 0
+      ? Number(season)
+      : urlSeasonNumber || seasons[0]?.number || 1;
+
+  const navigateToSeason = async (target) => {
+    if (!target) return false;
+    const dest = isWatchingEpisodeUrl(target) ? toSeasonHubUrl(target) || target : target;
+    if (dest.replace(/\/$/, "") === String(pageUrl || "").replace(/\/$/, "")) return false;
+    await loadUrlAndWait(contents, dest, { timeoutMs: 45_000, settleMs: 1200 });
+    pageUrl = contents.getURL() || dest;
+    return true;
+  };
+
+  const pageInfo = parseTornadoSeriesUrl(pageUrl);
+  if (pageInfo?.season !== requestedSeason) {
+    const seasonEntry = seasons.find((item) => item.number === requestedSeason);
+    if (seasonEntry?.url) {
+      try {
+        await navigateToSeason(seasonEntry.url);
+      } catch (error) {
+        return {
+          ok: false,
+          error: error.message || String(error),
+          seasons,
+          season: requestedSeason,
+          showSlug: pageSlug
+        };
+      }
+    } else if (scanEpisodes) {
+      // Ask the page scraper for a real season URL before giving up.
+      let probe = await scrapeTvShowFromPage(contents, {
+        season: requestedSeason,
+        skipSelect: false
+      });
+      if (probe?.needsNavigation && probe.navigateTo) {
+        try {
+          await navigateToSeason(probe.navigateTo);
+          const matched = seasons.find((item) => item.number === requestedSeason);
+          if (matched) matched.url = toSeasonHubUrl(probe.navigateTo) || probe.navigateTo;
+        } catch (error) {
+          return {
+            ok: false,
+            error: error.message || String(error),
+            seasons,
+            season: requestedSeason,
+            showSlug: pageSlug
+          };
+        }
+      }
+    }
+  }
+
+  if (!scanEpisodes) {
+    queueDebug("tv-seasons-page", "Prepared season list", {
+      url: pageUrl,
+      seasonCount: seasons.length,
+      withUrls: seasons.filter((item) => item.url).length,
+      showSlug: pageSlug
+    });
+    return {
+      ok: true,
+      showTitle: discovery.showTitle || null,
+      showUrl: discovery.showUrl || pageUrl,
+      posterUrl: discovery.posterUrl || null,
+      seasons,
+      season: requestedSeason,
+      showSlug: pageSlug,
+      source: discovery.ok ? "page" : "url"
+    };
+  }
+
+  let scan = await scrapeTvShowFromPage(contents, {
+    season: requestedSeason,
+    skipSelect: true
+  });
+
+  if (scan?.needsNavigation && scan.navigateTo) {
+    try {
+      await navigateToSeason(scan.navigateTo);
+      scan = await scrapeTvShowFromPage(contents, {
+        season: requestedSeason,
+        skipSelect: true
+      });
+    } catch (error) {
+      return {
+        ok: false,
+        error: error.message || String(error),
+        seasons,
+        season: requestedSeason,
+        showSlug: pageSlug
+      };
+    }
+  }
+
+  const applied = await applyTvShowScan(scan, contents.getURL() || pageUrl);
+  if (!applied.ok) {
+    return {
+      ...applied,
+      seasons,
+      season: requestedSeason,
+      showSlug: pageSlug,
+      showTitle: discovery.showTitle || scan?.showTitle || null,
+      showUrl: pageUrl,
+      posterUrl: discovery.posterUrl || scan?.posterUrl || null
+    };
+  }
+
+  queueDebug("tv-prepare", `Prepared ${applied.plan.showTitle} season ${applied.plan.season}`, {
+    seasonCount: seasons.length,
+    episodeCount: applied.plan.episodes?.length || 0,
+    season: applied.plan.season,
+    showSlug: pageSlug
+  });
+
+  return {
+    ok: true,
+    showTitle: applied.plan.showTitle,
+    showUrl: applied.plan.showUrl,
+    posterUrl: applied.plan.posterUrl || discovery.posterUrl || null,
+    seasons,
+    season: applied.plan.season,
+    showSlug: pageSlug,
+    plan: applied.plan,
+    source: "prepare"
+  };
+}
+
+async function scanTvShowFromUrl(url, season) {
+  const prepared = await prepareTvShowFromUrl(url, season, { scanEpisodes: true });
+  if (!prepared.ok) return prepared;
+  return { ok: true, plan: prepared.plan, seasons: prepared.seasons };
+}
+
+ipcMain.handle("discover-tv-seasons", async (_event, url) => {
+  if (!url || typeof url !== "string") {
+    return { ok: false, error: "Missing TV show URL." };
+  }
+  return discoverTvSeasonsFromUrl(url);
+});
+
+ipcMain.handle("prepare-tv-show", async (_event, payload = {}) => {
+  const url = typeof payload === "string" ? payload : payload?.url;
+  const season =
+    typeof payload === "object" && payload?.season != null ? Number(payload.season) : null;
+  if (!url || typeof url !== "string") {
+    return { ok: false, error: "Missing TV show URL." };
+  }
+  return prepareTvShowFromUrl(url, season, { scanEpisodes: true });
+});
+
+ipcMain.handle("scan-tv-show", async (_event, payload) => {
+  const url = typeof payload === "string" ? payload : payload?.url;
+  const season =
+    typeof payload === "object" && payload?.season != null ? Number(payload.season) : undefined;
+
+  if (url && typeof url === "string") {
+    return scanTvShowFromUrl(url, season);
+  }
+
+  const contents = browserView?.webContents;
+  if (!contents || contents.isDestroyed()) {
+    return { ok: false, error: "Browser is not ready." };
+  }
+
+  let scan = await scrapeTvShowFromPage(contents, { season, skipSelect: false });
+  if (scan?.needsNavigation && scan.navigateTo) {
+    try {
+      const dest = isWatchingEpisodeUrl(scan.navigateTo)
+        ? toSeasonHubUrl(scan.navigateTo) || scan.navigateTo
+        : scan.navigateTo;
+      await loadUrlAndWait(contents, dest, { timeoutMs: 45_000, settleMs: 1200 });
+      scan = await scrapeTvShowFromPage(contents, {
+        season: season || scan.season,
+        skipSelect: true
+      });
+    } catch (error) {
+      return { ok: false, error: error.message || String(error) };
+    }
+  }
+  return applyTvShowScan(scan, contents.getURL() || "");
 });
 
 ipcMain.handle("add-tv-plan-to-queue", (_event, destination = "local") => {

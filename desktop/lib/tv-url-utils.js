@@ -149,6 +149,102 @@ function episodeFileLabel(season, episode) {
   return `${seasonPart}${episodePart}`;
 }
 
+function showBaseSlugFromUrl(url) {
+  try {
+    const pathname = new URL(String(url || "")).pathname;
+    const match = pathname.match(/\/(?:tv-series|tv|serie|series|episode|episodes|watch)\/([^/]+)/i);
+    if (!match) return null;
+    return match[1].replace(/-season-\d{1,2}$/i, "") || null;
+  } catch {
+    const match = String(url || "").match(
+      /\/(?:tv-series|tv|serie|series|episode|episodes|watch)\/([^/?#]+)/i
+    );
+    if (!match) return null;
+    return match[1].replace(/-season-\d{1,2}$/i, "") || null;
+  }
+}
+
+function seasonNumberFromUrl(url) {
+  try {
+    const pathname = new URL(String(url || "")).pathname;
+    const match = pathname.match(/-season-(\d{1,2})(?:\/|$)/i);
+    return match ? Number.parseInt(match[1], 10) || null : null;
+  } catch {
+    const match = String(url || "").match(/-season-(\d{1,2})(?:\/|$|\?|#)/i);
+    return match ? Number.parseInt(match[1], 10) || null : null;
+  }
+}
+
+function isWatchingEpisodeUrl(url) {
+  return /\/[A-Za-z0-9_-]+-watching\.html?$/i.test(String(url || ""));
+}
+
+/**
+ * Tornado episode/season paths look like:
+ *   /series/breaking-bad-season-1/NXRv9c1C/bnlun6q0-watching.html
+ *   /series/curb-your-enthusiasm-season-1/ooglfzCm/XYGCjoqV/1p4OkVDs-watching.html
+ * Each season has its own seasonId — never rewrite season-N while keeping another season's id.
+ */
+function parseTornadoSeriesUrl(url, baseUrl = SITE_BASE_URL) {
+  try {
+    const parsed = new URL(String(url || ""), baseUrl);
+    const parts = parsed.pathname.split("/").filter(Boolean);
+    if (parts.length < 2) return null;
+    if (!/^(?:tv-series|tv|serie|series)$/i.test(parts[0])) return null;
+
+    const slug = parts[1];
+    const seasonMatch = slug.match(/^(.*)-season-(\d{1,2})$/i);
+    const watchingPart = parts.find((part) => /-watching\.html?$/i.test(part)) || null;
+    const seasonId = parts[2] && !/-watching\.html?$/i.test(parts[2]) ? parts[2] : null;
+
+    return {
+      origin: parsed.origin,
+      slug,
+      baseSlug: seasonMatch ? seasonMatch[1] : slug,
+      season: seasonMatch ? Number.parseInt(seasonMatch[2], 10) : null,
+      seasonId,
+      watchId: watchingPart ? watchingPart.replace(/-watching\.html?$/i, "") : null,
+      isWatching: Boolean(watchingPart),
+      href: parsed.toString().replace(/\/$/, "")
+    };
+  } catch {
+    return null;
+  }
+}
+
+function toSeasonHubUrl(url, baseUrl = SITE_BASE_URL) {
+  const info = parseTornadoSeriesUrl(url, baseUrl);
+  if (!info?.seasonId) return null;
+  return `${info.origin}/series/${info.slug}/${info.seasonId}`;
+}
+
+function buildSeasonListFromUrl(url, maxSeason = null) {
+  const baseSlug = showBaseSlugFromUrl(url);
+  const currentSeason = seasonNumberFromUrl(url);
+  const top = Number.parseInt(maxSeason, 10) || currentSeason;
+  if (!baseSlug || !top || top < 1) return [];
+
+  // Numbers only — Tornado season IDs differ per season, so fabricated URLs are wrong.
+  const seasons = [];
+  for (let number = 1; number <= Math.min(top, 99); number += 1) {
+    seasons.push({
+      number,
+      label: `Season ${number}`,
+      url: null
+    });
+  }
+  return seasons;
+}
+
+function buildSeasonPageUrl(url, seasonNumber, baseUrl = SITE_BASE_URL) {
+  // Intentionally conservative: only rewrite when the requested season matches the URL's season.
+  // Cross-season navigation must use scraped dropdown links (unique season IDs).
+  const season = Number.parseInt(seasonNumber, 10);
+  const info = parseTornadoSeriesUrl(url, baseUrl);
+  if (!season || !info?.season || info.season !== season) return null;
+  return toSeasonHubUrl(url, baseUrl) || info.href;
+}
+
 function safeShowFolderName(title) {
   return String(title || "TV Show")
     .replace(/[<>:"/\\|?*]+/g, "_")
@@ -168,5 +264,12 @@ module.exports = {
   isTvEpisodePageUrl,
   isDownloadableContentUrl,
   episodeFileLabel,
-  safeShowFolderName
+  safeShowFolderName,
+  buildSeasonPageUrl,
+  showBaseSlugFromUrl,
+  seasonNumberFromUrl,
+  buildSeasonListFromUrl,
+  isWatchingEpisodeUrl,
+  parseTornadoSeriesUrl,
+  toSeasonHubUrl
 };

@@ -1147,9 +1147,107 @@ body {
 }
 
 .catalog-detail-status {
-  margin: 0 0 22px;
+  margin: 0 0 14px;
   color: var(--text-secondary);
   min-height: 1.4em;
+}
+
+.catalog-tv-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0 0 18px;
+  min-height: 0;
+}
+
+.catalog-tv-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+  gap: 12px;
+}
+
+.catalog-tv-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.catalog-tv-field span,
+.queue-tv-season-row label {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.catalog-tv-season-select,
+.catalog-tv-episode-select,
+.queue-tv-season-select {
+  width: 100%;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--glass-border-subtle);
+  border-radius: var(--radius-md);
+  background: rgba(0, 0, 0, 0.28);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 14px;
+}
+
+.catalog-tv-episode-summary {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.catalog-tv-episode-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: min(280px, 36vh);
+  overflow: auto;
+  border: 1px solid var(--glass-border-subtle);
+  border-radius: var(--radius-md);
+  background: rgba(0, 0, 0, 0.18);
+}
+
+.catalog-tv-episode-list li {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px;
+  align-items: baseline;
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 13px;
+}
+
+.catalog-tv-episode-list li:last-child {
+  border-bottom: none;
+}
+
+.catalog-tv-episode-list .ep-code {
+  color: var(--ios-teal);
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.catalog-tv-episode-list .ep-title {
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.catalog-tv-episode-list li.is-active {
+  background: rgba(90, 200, 250, 0.12);
+}
+
+.queue-tv-season-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 16px;
 }
 
 .catalog-detail-actions {
@@ -1165,6 +1263,10 @@ body {
 
   .catalog-detail-poster {
     max-width: 220px;
+  }
+
+  .catalog-tv-controls {
+    grid-template-columns: 1fr;
   }
 }
 
