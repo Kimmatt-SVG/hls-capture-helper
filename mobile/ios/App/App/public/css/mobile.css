@@ -4,12 +4,18 @@
   --safe-left: env(safe-area-inset-left, 0px);
   --safe-right: env(safe-area-inset-right, 0px);
   --mobile-gutter: 12px;
+  --app-bg: #0a0a12;
+}
+
+html {
+  height: 100%;
+  background: var(--app-bg);
 }
 
 html,
 body.platform-ios {
-  height: 100%;
-  min-height: 100%;
+  margin: 0;
+  width: 100%;
   overflow: hidden;
   -webkit-text-size-adjust: 100%;
   touch-action: manipulation;
@@ -18,50 +24,64 @@ body.platform-ios {
 body.platform-ios {
   display: flex;
   flex-direction: column;
+  box-sizing: border-box;
   min-height: 100dvh;
-  max-height: 100dvh;
-  padding-top: var(--safe-top);
-  padding-bottom: var(--safe-bottom);
-  padding-left: var(--safe-left);
-  padding-right: var(--safe-right);
+  height: 100dvh;
+  background: var(--app-bg);
+  color: var(--text-primary);
+  padding:
+    var(--safe-top)
+    var(--safe-right)
+    var(--safe-bottom)
+    var(--safe-left);
 }
 
 body.platform-ios .mobile-toolbar {
   flex: 0 0 auto;
   position: relative;
   top: auto;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 10px;
-  margin: var(--mobile-gutter) var(--mobile-gutter) 8px;
-  padding: 14px;
+  display: grid;
+  grid-template-areas:
+    "brand actions"
+    "search search";
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px 8px;
+  margin: 0 var(--mobile-gutter) 4px;
+  padding: 8px 10px;
+  min-height: 0 !important;
+}
+
+body.platform-ios .mobile-toolbar[hidden] {
+  display: none !important;
 }
 
 body.platform-ios .toolbar-primary {
-  width: 100%;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 10px;
+  display: contents;
+}
+
+body.platform-ios .brand {
+  grid-area: brand;
+  min-width: 0;
 }
 
 body.platform-ios .brand strong {
-  font-size: 20px;
-  line-height: 1.15;
+  font-size: 16px;
+  line-height: 1.1;
 }
 
 body.platform-ios .brand .muted,
 body.platform-ios #stream-status {
-  font-size: 12px;
-  line-height: 1.35;
-  color: var(--text-secondary);
+  display: none;
 }
 
 body.platform-ios .toolbar-search {
+  grid-area: search;
   display: grid;
   width: 100%;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 8px;
-  flex: none;
+  gap: 6px;
+  flex: 0 0 auto !important;
 }
 
 body.platform-ios .toolbar-search[hidden] {
@@ -70,20 +90,34 @@ body.platform-ios .toolbar-search[hidden] {
 
 body.platform-ios .toolbar-search input {
   width: 100%;
-  min-height: 44px;
+  min-height: 38px;
+  padding: 8px 12px;
   font-size: 16px;
 }
 
 body.platform-ios .mobile-actions {
-  display: grid;
-  width: 100%;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
+  grid-area: actions;
+  display: flex;
+  width: auto;
+  gap: 6px;
 }
 
 body.platform-ios .mobile-actions .secondary,
-body.platform-ios .mobile-actions .danger,
-body.platform-ios .toolbar-search button,
+body.platform-ios .mobile-actions .danger {
+  min-height: 34px;
+  width: auto;
+  padding: 0 12px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+body.platform-ios .toolbar-search button {
+  min-height: 38px;
+  width: auto;
+  padding: 0 14px;
+  white-space: nowrap;
+}
+
 body.platform-ios .catalog-detail-actions button,
 body.platform-ios .queue-run-bar button {
   min-height: 44px;
@@ -96,11 +130,17 @@ body.platform-ios .mobile-status-bar {
 
 body.platform-ios.catalog-subview .toolbar-search,
 body.platform-ios[data-catalog-view="library"] .toolbar-search,
-body.platform-ios[data-catalog-view="results"] .toolbar-search,
 body.platform-ios[data-catalog-view="detail"] .toolbar-search,
 body.platform-ios:has(#catalog-library:not([hidden])) .toolbar-search,
-body.platform-ios:has(#catalog-results:not([hidden])) .toolbar-search,
 body.platform-ios:has(#catalog-detail:not([hidden])) .toolbar-search {
+  display: none !important;
+}
+
+body.platform-ios.catalog-subview .mobile-toolbar,
+body.platform-ios[data-catalog-view="library"] .mobile-toolbar,
+body.platform-ios[data-catalog-view="detail"] .mobile-toolbar,
+body.platform-ios:has(#catalog-library:not([hidden])) .mobile-toolbar,
+body.platform-ios:has(#catalog-detail:not([hidden])) .mobile-toolbar {
   display: none !important;
 }
 
@@ -110,31 +150,61 @@ body.platform-ios:has(#catalog-library:not([hidden])) #open-library {
   display: none !important;
 }
 
-body.platform-ios[data-catalog-view="library"] .mobile-toolbar,
-body.platform-ios[data-catalog-view="results"] .mobile-toolbar,
-body.platform-ios[data-catalog-view="detail"] .mobile-toolbar,
-body.platform-ios:has(#catalog-library:not([hidden])) .mobile-toolbar,
-body.platform-ios:has(#catalog-results:not([hidden])) .mobile-toolbar,
-body.platform-ios:has(#catalog-detail:not([hidden])) .mobile-toolbar {
-  margin-bottom: 0;
-  padding-bottom: 10px;
-}
-
 body.platform-ios .search-panel {
   flex: 1 1 auto;
-  min-height: 0;
+  min-height: 0 !important;
   height: auto !important;
   max-height: none;
-  margin: 0 var(--mobile-gutter) var(--mobile-gutter);
-  padding: 0;
-  overflow: auto;
+  margin: 0 var(--mobile-gutter);
+  padding: 0 0 var(--mobile-gutter);
+  overflow: hidden;
   -webkit-overflow-scrolling: touch;
   align-items: stretch;
+  display: flex;
+  flex-direction: column;
+}
+
+body.platform-ios.catalog-subview .search-panel,
+body.platform-ios:has(#catalog-library:not([hidden])) .search-panel,
+body.platform-ios:has(#catalog-detail:not([hidden])) .search-panel {
+  margin-top: 0;
+  overflow: auto !important;
+}
+
+body.platform-ios:has(#catalog-results:not([hidden])) .search-panel {
+  overflow: hidden !important;
+}
+
+body.platform-ios .catalog-results,
+body.platform-ios .catalog-detail {
+  width: 100%;
+  flex: 1 1 auto;
+  min-height: 0 !important;
+  height: auto !important;
+  max-height: none !important;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  padding: 0 2px;
+}
+
+body.platform-ios .catalog-results-head {
+  flex: 0 0 auto;
+  margin-bottom: 10px;
+}
+
+body.platform-ios .catalog-grid {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 12px;
 }
 
 body.platform-ios .catalog-home {
   width: 100%;
-  min-height: auto;
+  min-height: 0 !important;
+  height: auto !important;
   gap: 10px;
 }
 
@@ -160,8 +230,8 @@ body.platform-ios .download-queue-section {
 
 body.platform-ios .activity-log-section {
   order: 2;
-  min-height: 160px;
-  max-height: 34dvh;
+  min-height: 0;
+  max-height: none;
 }
 
 body.platform-ios .queue-run-bar {
@@ -172,12 +242,48 @@ body.platform-ios .queue-run-bar {
 
 body.platform-ios .download-queue-list,
 body.platform-ios .activity-log-list {
-  max-height: 28dvh;
+  max-height: none;
 }
 
+body.platform-ios .catalog-grid,
 body.platform-ios .mobile-catalog-grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  gap: 8px;
+}
+
+body.platform-ios .catalog-card {
+  gap: 5px;
+}
+
+body.platform-ios .catalog-card-poster {
+  border-radius: 8px;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.24);
+}
+
+body.platform-ios .catalog-card-kind {
+  top: 4px;
+  left: 4px;
+  padding: 2px 5px;
+  font-size: 8px;
+}
+
+body.platform-ios .catalog-card-title {
+  font-size: 11px;
+  line-height: 1.25;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+body.platform-ios .catalog-card-year {
+  font-size: 10px;
+}
+
+body.platform-ios .catalog-card-poster-fallback {
+  padding: 8px;
+  font-size: 10px;
+  line-height: 1.25;
 }
 
 body.platform-ios .mobile-catalog-detail-body {
@@ -205,13 +311,83 @@ body.platform-ios .catalog-back {
 
 body.platform-ios .mobile-catalog-library {
   width: 100%;
+  padding: 0 0 16px;
 }
 
 body.platform-ios .catalog-library-head {
   display: flex;
   flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 8px;
+  margin: 0 0 8px;
+  padding: 4px 0 8px;
+  background: none;
+}
+
+body.platform-ios .catalog-library-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+body.platform-ios .catalog-library-head h2 {
+  margin: 0;
+  text-align: left;
+  font-size: 28px;
+}
+
+body.platform-ios .catalog-library-summary,
+body.platform-ios .library-summary {
+  text-align: left;
+}
+
+body.platform-ios .catalog-library .catalog-back,
+body.platform-ios .catalog-library #refresh-library {
+  align-self: flex-start;
+  min-height: 36px;
+}
+
+body.platform-ios .catalog-library-sections {
+  gap: 8px;
+  padding: 0 0 24px;
+  overflow: visible;
+}
+
+body.platform-ios .catalog-library .library-section-head {
+  padding: 0;
+  margin-bottom: 8px;
+}
+
+body.platform-ios .catalog-library .library-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
-  margin-bottom: 12px;
+  overflow: visible;
+  padding: 0 0 12px;
+}
+
+body.platform-ios .catalog-library .library-item,
+body.platform-ios .catalog-library .library-item:hover,
+body.platform-ios .catalog-library .library-item:focus-within {
+  flex: none;
+  width: auto;
+  min-width: 0;
+  max-width: none;
+  transform: none;
+}
+
+body.platform-ios .catalog-library .library-poster-card,
+body.platform-ios .catalog-library .library-show-header,
+body.platform-ios .catalog-library .library-banner,
+body.platform-ios .catalog-library .library-banner-fallback {
+  width: 100% !important;
+  max-width: none !important;
+  min-width: 0 !important;
+  height: auto !important;
+  max-height: none !important;
+  aspect-ratio: 2 / 3;
 }
 
 body.platform-ios .library-sections {
@@ -219,21 +395,81 @@ body.platform-ios .library-sections {
   gap: 12px;
 }
 
+body.platform-ios.catalog-subview .catalog-results,
+body.platform-ios.catalog-subview .catalog-detail,
+body.platform-ios.catalog-subview .mobile-catalog-library {
+  padding-top: 4px;
+}
+
+body.platform-ios .catalog-library .library-banner {
+  display: block;
+  object-fit: cover;
+  object-position: center top;
+}
+
 body.platform-ios .mobile-progress-dock {
   flex: 0 0 auto;
-  padding-bottom: var(--safe-bottom);
+  margin-bottom: 0;
 }
 
-body.platform-ios .settings-window {
-  display: block;
-  min-height: 100vh;
-  padding: 16px;
-  overflow: auto;
+html:has(body.settings-window) {
+  height: 100%;
+  overflow: hidden;
+  touch-action: pan-y;
 }
 
-body.platform-ios .settings-card {
+body.platform-ios.settings-window {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  max-height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+  touch-action: pan-y;
+  padding:
+    calc(12px + var(--safe-top))
+    calc(var(--mobile-gutter) + var(--safe-right))
+    calc(12px + var(--safe-bottom))
+    calc(var(--mobile-gutter) + var(--safe-left));
+}
+
+body.platform-ios.settings-window .settings-card {
+  flex: 1 1 auto;
+  min-height: 0;
   width: 100%;
-  margin: 0 auto 24px;
+  margin: 0 auto;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  padding-bottom: calc(28px + var(--keyboard-inset, 0px));
+}
+
+body.platform-ios .settings-header {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+body.platform-ios .settings-back {
+  margin-bottom: 2px;
+  min-height: 44px;
+}
+
+body.platform-ios .settings-inline-status {
+  margin-top: 4px;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+body.platform-ios .settings-inline-status[hidden] {
+  display: none !important;
+}
+
+body.platform-ios #settings-close {
+  display: none;
 }
 
 body.platform-ios .mobile-settings-path-row,
@@ -250,7 +486,8 @@ body.platform-ios .settings-path-row {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
-  body.platform-ios .mobile-catalog-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+  body.platform-ios .mobile-catalog-grid,
+  body.platform-ios .catalog-grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
   }
 }

@@ -13,6 +13,7 @@ def capacitor_pods
   pod 'CapacitorCordova', :path => '../../node_modules/@capacitor/ios'
   pod 'CapacitorApp', :path => '../../node_modules/@capacitor/app'
   pod 'CapacitorFilesystem', :path => '../../node_modules/@capacitor/filesystem'
+  pod 'CapacitorKeyboard', :path => '../../node_modules/@capacitor/keyboard'
   pod 'CapacitorPreferences', :path => '../../node_modules/@capacitor/preferences'
   pod 'CapacitorStatusBar', :path => '../../node_modules/@capacitor/status-bar'
   pod 'MovieEngine', :path => '../../plugins/movie-engine'
@@ -23,6 +24,54 @@ target 'App' do
   # Add your Pods here
 end
 
+def strip_amsmb2_flags(value)
+  result = value.to_s.dup
+  result.gsub!(/-framework\s+"AMSMB2"/, '')
+  result.gsub!(/-framework\s+AMSMB2/, '')
+  result.gsub!(/-l"smb2-ios"/, '')
+  result.gsub!(/-lsmb2-ios/, '')
+  result.gsub!(/-Xcc\s+-fmodule-map-file="[^"]*AMSMB2[^"]*"/, '')
+  result.gsub!(/"[^"]*AMSMB2[^"]*"/, '')
+  result.gsub!(/'[^']*AMSMB2[^']*'/, '')
+  result.gsub!(/-F\$\{PODS_CONFIGURATION_BUILD_DIR\}\/AMSMB2/, '')
+  result.gsub!(/(?:\$\{?PODS_(?:ROOT|CONFIGURATION_BUILD_DIR)\}?|\$\(PODS_ROOT\)|\$\(PODS_TARGET_SRCROOT\))\/AMSMB2\S*/, '')
+  result.gsub!(/\$\(PODS_TARGET_SRCROOT\)\/libsmb2\S*/, '')
+  result.gsub(/\s+/, ' ').strip
+end
+
+def confine_device_only_flags(xcconfig_path, simulator_extras: {}, keys: nil)
+  return unless File.exist?(xcconfig_path)
+  allowed_keys = keys || %w[
+    OTHER_LDFLAGS
+    FRAMEWORK_SEARCH_PATHS
+    LIBRARY_SEARCH_PATHS
+    HEADER_SEARCH_PATHS
+    SWIFT_INCLUDE_PATHS
+    OTHER_SWIFT_FLAGS
+    OTHER_MODULE_VERIFIER_FLAGS
+  ]
+
+  rewritten = File.read(xcconfig_path).lines.map do |line|
+    match = line.match(/^([A-Z0-9_]+)\s*=\s*(.*)$/)
+    next line unless match
+
+    key = match[1]
+    value = match[2]
+    next line if key.include?('[sdk=')
+    next line unless allowed_keys.include?(key)
+    needs_split = value.include?('AMSMB2') || value.include?('smb2-ios') || value.include?('libsmb2')
+    next line unless needs_split
+
+    sim_value = strip_amsmb2_flags(value)
+    if simulator_extras[key]
+      sim_value = "#{sim_value} #{simulator_extras[key]}".strip
+    end
+    "#{key} = #{sim_value}\n#{key}[sdk=iphoneos*] = #{value}\n"
+  end.join
+
+  File.write(xcconfig_path, rewritten)
+end
+
 post_install do |installer|
   assertDeploymentTarget(installer)
 
@@ -31,32 +80,27 @@ post_install do |installer|
       config.build_settings['CLANG_ENABLE_EXPLICIT_MODULES'] = 'NO'
       config.build_settings['SWIFT_ENABLE_EXPLICIT_MODULES'] = 'NO'
     end
+  end
 
-    if target.name == 'AMSMB2'
-      # AMSMB2 2.7.1 only ships device binaries; build it for iPhone hardware only.
-      target.build_configurations.each do |config|
-        config.build_settings['SUPPORTED_PLATFORMS'] = 'iphoneos'
-      end
+  support_root = File.join(installer.sandbox.root, 'Target Support Files')
+  %w[MovieEngine Pods-App].each do |name|
+    Dir.glob(File.join(support_root, name, '*.xcconfig')).each do |path|
+      confine_device_only_flags(path)
     end
+  end
+  Dir.glob(File.join(support_root, 'AMSMB2', '*.xcconfig')).each do |path|
+    confine_device_only_flags(path, simulator_extras: {
+      'OTHER_LDFLAGS' => '-undefined dynamic_lookup'
+    }, keys: %w[OTHER_LDFLAGS LIBRARY_SEARCH_PATHS])
+  end
 
-    if target.name == 'MovieEngine'
-      target.build_configurations.each do |config|
-        other_ldflags = config.build_settings['OTHER_LDFLAGS[sdk=iphonesimulator*]'] || '$(inherited)'
-        other_ldflags = other_ldflags.is_a?(Array) ? other_ldflags.join(' ') : other_ldflags.to_s
-        other_ldflags = other_ldflags.gsub('-framework "AMSMB2"', '').gsub('-framework AMSMB2', '').strip
-        config.build_settings['OTHER_LDFLAGS[sdk=iphonesimulator*]'] = other_ldflags
-        include_paths = config.build_settings['SWIFT_INCLUDE_PATHS[sdk=iphonesimulator*]'] || '$(inherited)'
-        include_paths = include_paths.is_a?(Array) ? include_paths.join(' ') : include_paths.to_s
-        include_paths = include_paths.gsub('"${PODS_ROOT}/AMSMB2/libsmb2/include"', '')
-          .gsub('"${PODS_ROOT}/AMSMB2/libsmb2/**"', '')
-          .gsub(/\s+/, ' ').strip
-        config.build_settings['SWIFT_INCLUDE_PATHS[sdk=iphonesimulator*]'] = include_paths
-        swift_flags = config.build_settings['OTHER_SWIFT_FLAGS[sdk=iphonesimulator*]'] || '$(inherited)'
-        swift_flags = swift_flags.is_a?(Array) ? swift_flags.join(' ') : swift_flags.to_s
-        swift_flags = swift_flags.gsub('-Xcc -fmodule-map-file="${PODS_ROOT}/AMSMB2/libsmb2/include/module.modulemap"', '').strip
-        config.build_settings['OTHER_SWIFT_FLAGS[sdk=iphonesimulator*]'] = swift_flags
-      end
-    end
+  Dir.glob(File.join(support_root, 'Pods-App', '*-frameworks.sh')).each do |script|
+    text = File.read(script)
+    patched = text.gsub(
+      "  install_framework \"${BUILT_PRODUCTS_DIR}/AMSMB2/AMSMB2.framework\"\n",
+      "  if [[ \"${PLATFORM_NAME}\" != \"iphonesimulator\" ]]; then\n    install_framework \"${BUILT_PRODUCTS_DIR}/AMSMB2/AMSMB2.framework\"\n  fi\n"
+    )
+    File.write(script, patched) if patched != text
   end
 
   installer.aggregate_targets.each do |aggregate_target|

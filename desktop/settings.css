@@ -129,11 +129,32 @@ body.settings-window {
   font-size: 0.92rem;
 }
 
-.settings-inline-error {
+.settings-inline-error,
+.settings-inline-status {
   min-height: 1.2rem;
   margin: 0;
   color: #ffb347;
   font-size: 0.92rem;
+  line-height: 1.45;
+}
+
+.settings-inline-status {
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 179, 71, 0.28);
+  background: rgba(255, 179, 71, 0.12);
+}
+
+.settings-inline-status.success {
+  color: #9be7b8;
+  border-color: rgba(115, 217, 159, 0.35);
+  background: rgba(115, 217, 159, 0.14);
+}
+
+.settings-inline-status.pending {
+  color: var(--text-secondary);
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .settings-status {

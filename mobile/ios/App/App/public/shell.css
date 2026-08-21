@@ -681,7 +681,22 @@ body {
 }
 
 .catalog-library .library-poster-badge.kind-tv {
-  background: rgba(70, 140, 255, 0.95);
+  background: rgba(80, 140, 255, 0.92);
+}
+
+.catalog-library .library-progress {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 4px;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 4;
+}
+
+.catalog-library .library-progress-fill {
+  height: 100%;
+  background: #ffe90d;
 }
 
 .catalog-library .library-title {

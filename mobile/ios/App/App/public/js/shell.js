@@ -107,6 +107,7 @@ const PROGRESS_DOCK_HEIGHT = 88;
 const MAX_LOG_ENTRIES = 120;
 
 let progressHideTimer = null;
+let progressErrorPinned = false;
 let chromeLayoutFrame = null;
 let downloadActive = false;
 let librarySyncActive = false;
@@ -628,6 +629,7 @@ async function downloadSelectedCatalogMovie(destination) {
   const result = await window.streamApp.downloadMovie({
     movieUrl: selectedCatalogMovie.movieUrl,
     title: selectedCatalogMovie.title,
+    posterUrl: selectedCatalogMovie.posterUrl,
     destination
   });
 
@@ -654,6 +656,7 @@ async function addSelectedCatalogMovieToQueue(destination = "local") {
   const result = await window.streamApp.addMovieToQueue({
     movieUrl: selectedCatalogMovie.movieUrl,
     title: selectedCatalogMovie.title,
+    posterUrl: selectedCatalogMovie.posterUrl,
     destination
   });
 
@@ -794,10 +797,22 @@ function renderLibraryItem(movie) {
 
   scrub.append(badge, title);
   card.appendChild(scrub);
+  const progress = Number(movie.playbackProgress);
+  if (progress > 0.02 && progress < 0.97) {
+    const bar = document.createElement("div");
+    bar.className = "library-progress";
+    const fill = document.createElement("div");
+    fill.className = "library-progress-fill";
+    fill.style.width = `${Math.round(progress * 100)}%`;
+    bar.appendChild(fill);
+    card.appendChild(bar);
+  }
   item.appendChild(card);
 
-  const openMovie = () => {
-    if (movie.filePath) window.streamApp.openDownloadedMovie(movie.filePath);
+  const openMovie = async () => {
+    if (!movie.filePath) return;
+    await window.streamApp.openDownloadedMovie(movie.filePath);
+    refreshLibrary(true);
   };
   item.addEventListener("click", openMovie);
   item.addEventListener("keydown", (event) => {
@@ -872,9 +887,11 @@ function renderLibraryShowItem(show) {
     play.type = "button";
     play.className = "library-episode-play";
     play.textContent = "Play";
-    play.addEventListener("click", (event) => {
+    play.addEventListener("click", async (event) => {
       event.stopPropagation();
-      if (episode.filePath) window.streamApp.openDownloadedMovie(episode.filePath);
+      if (!episode.filePath) return;
+      await window.streamApp.openDownloadedMovie(episode.filePath);
+      refreshLibrary(true);
     });
 
     row.append(label, play);
@@ -910,10 +927,12 @@ function renderLibraryShowItem(show) {
         drawer.replaceChildren(heading, clone);
         drawer.hidden = false;
         drawer.querySelectorAll(".library-episode-play").forEach((btn, index) => {
-          btn.addEventListener("click", (event) => {
+          btn.addEventListener("click", async (event) => {
             event.stopPropagation();
             const episode = show.episodes?.[index];
-            if (episode?.filePath) window.streamApp.openDownloadedMovie(episode.filePath);
+            if (!episode?.filePath) return;
+            await window.streamApp.openDownloadedMovie(episode.filePath);
+            refreshLibrary(true);
           });
         });
       } else {
@@ -935,8 +954,17 @@ function createBannerFallback(title) {
   return fallback;
 }
 
+function isIOSCatalogLibrary() {
+  return document.body.classList.contains("platform-ios");
+}
+
 function formatLibraryPath(folderPath) {
-  if (!folderPath) return "Unknown folder";
+  if (!folderPath) return "";
+  if (folderPath.includes("/") && !folderPath.includes("\\")) {
+    const parts = folderPath.split("/").filter(Boolean);
+    if (parts.includes("Downloads")) return "On My iPhone · Downloads";
+    return parts.slice(-2).join("/") || folderPath;
+  }
 
   const normalized = folderPath.replace(/\//g, "\\");
   if (normalized.startsWith("\\\\")) {
@@ -991,7 +1019,8 @@ function renderLibrarySection(section, label, location) {
   });
 
   actions.append(count);
-  if (location === "local" && section.accessible) {
+  const isIOS = document.body.classList.contains("platform-ios");
+  if (!isIOS && location === "local" && section.accessible) {
     const syncButton = document.createElement("button");
     syncButton.type = "button";
     syncButton.className = "library-open-folder";
@@ -1003,7 +1032,9 @@ function renderLibrarySection(section, label, location) {
     });
     actions.append(syncButton);
   }
-  actions.append(openFolder);
+  if (!isIOS) {
+    actions.append(openFolder);
+  }
   head.append(titleWrap, actions);
   wrapper.appendChild(head);
 
@@ -1050,24 +1081,32 @@ async function refreshLibrary(force = false) {
     backfillPosters: Boolean(force)
   });
 
-  librarySections.replaceChildren(
-    renderLibrarySection(library.local, "Movies & TV on this PC", "local"),
-    renderLibrarySection(library.nas, "Movies & TV on NAS", "nas")
-  );
+  if (isIOSCatalogLibrary()) {
+    librarySections.replaceChildren(
+      renderLibrarySection(library.local, "On this iPhone", "local")
+    );
+  } else {
+    librarySections.replaceChildren(
+      renderLibrarySection(library.local, "Movies & TV on this PC", "local"),
+      renderLibrarySection(library.nas, "Movies & TV on NAS", "nas")
+    );
+  }
 
   const env = await window.streamApp.getEnvironment();
+  const nasLabel = formatLibraryPath(env.nasVideoFolder);
   librarySummary.textContent = `${library.totalCount} title${library.totalCount === 1 ? "" : "s"}${
     library.showCount ? ` · ${library.showCount} TV show${library.showCount === 1 ? "" : "s"}` : ""
-  } · NAS: ${formatLibraryPath(env.nasVideoFolder)}`;
+  }${nasLabel && !isIOSCatalogLibrary() ? ` · NAS: ${nasLabel}` : ""}`;
 
   if (catalogMode && catalogView === "library") {
     const items = librarySections.querySelectorAll(".library-item");
-    // Avoid opacity-freeze entrance on library tiles — posters were staying invisible.
     for (const item of items) {
       item.style.opacity = "";
       item.style.transform = "";
     }
-    window.shellMotion?.bindPosterInteractions?.(items);
+    if (!isIOSCatalogLibrary()) {
+      window.shellMotion?.bindPosterInteractions?.(items);
+    }
   }
 }
 
@@ -1259,6 +1298,15 @@ function handleQueueUpdate(payload = {}) {
       streamStatus.textContent = `Queue: retrying ${payload.item.title} (attempt ${payload.attempt || 2})...`;
     } else if (payload.phase === "preparing") {
       streamStatus.textContent = `Queue: starting download for ${payload.item.title} (${target})...`;
+    } else if (payload.phase === "item-failed") {
+      streamStatus.textContent = payload.error || payload.item?.error || "Download failed.";
+      updateProgressDock({
+        state: "failed",
+        phase: payload.error || payload.item?.error || "Download failed",
+        lastLogLine: payload.error || payload.item?.error,
+        destination: payload.item?.destination,
+        outputName: payload.item?.title
+      });
     }
   }
 
@@ -1280,6 +1328,22 @@ function handleQueueUpdate(payload = {}) {
     streamStatus.textContent = counts.failed
       ? "Queue finished with errors — see the queue list."
       : "Queue finished — all downloads complete.";
+    const failedItem = (snapshot.items || []).find((item) => item.status === "failed");
+    if (counts.failed) {
+      updateProgressDock({
+        state: "failed",
+        phase: failedItem?.error || (counts.done ? "Queue finished with errors" : "Download failed"),
+        lastLogLine: failedItem?.error || payload.error,
+        destination: failedItem?.destination,
+        outputName: failedItem?.title
+      });
+    } else {
+      updateProgressDock({
+        state: "finished",
+        phase: counts.failed ? "Queue finished with errors" : "Queue finished",
+        destination: "local"
+      });
+    }
     refreshLibrary(true);
   }
 
@@ -1573,6 +1637,7 @@ function setupChromeLayoutObserver() {
 }
 
 function hideProgressDock() {
+  if (progressErrorPinned) return;
   progressDock.hidden = true;
   reportChromeLayout();
   progressTrack.className = "progress-track";
@@ -1580,10 +1645,11 @@ function hideProgressDock() {
 }
 
 function scheduleProgressHide(delayMs = 6000) {
-  if (queueActive || tvShowActive) return;
+  if (queueActive || tvShowActive || progressErrorPinned) return;
   if (progressHideTimer) clearTimeout(progressHideTimer);
   progressHideTimer = setTimeout(async () => {
     progressHideTimer = null;
+    if (progressErrorPinned) return;
     hideProgressDock();
     await window.streamApp.clearDownloadJob();
     loggedDownloadJobId = null;
@@ -1652,8 +1718,25 @@ function updateSyncProgressDock(progress) {
 
 function updateProgressDock(status) {
   if (!status || status.state === "idle") {
+    if (progressErrorPinned) return;
     if (!downloadActive && !librarySyncActive && !queueActive) hideProgressDock();
     return;
+  }
+
+  if (status.state === "running") {
+    progressErrorPinned = false;
+    if (progressHideTimer) {
+      clearTimeout(progressHideTimer);
+      progressHideTimer = null;
+    }
+  } else if (status.state === "failed") {
+    progressErrorPinned = true;
+    if (progressHideTimer) {
+      clearTimeout(progressHideTimer);
+      progressHideTimer = null;
+    }
+  } else if (status.state === "finished") {
+    progressErrorPinned = false;
   }
 
   progressDock.hidden = false;
@@ -1793,7 +1876,6 @@ async function refreshDownloadStatus() {
     refreshLibrary(true);
   } else if (status.state === "failed") {
     downloadStatus.textContent = status.lastLogLine || "Download failed.";
-    scheduleProgressHide(8000);
   }
 }
 

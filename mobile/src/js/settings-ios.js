@@ -3,7 +3,10 @@
   const MovieEngine = window.MovieEngine;
 
   async function saveSiteCredentials(payload) {
-    await Preferences?.set({
+    if (!Preferences?.set) {
+      throw new Error("Storage is not ready. Rebuild the app in Xcode.");
+    }
+    await Preferences.set({
       key: "site_credentials",
       value: JSON.stringify({
         username: String(payload?.username || "").trim(),
@@ -44,7 +47,7 @@
         };
       } catch (error) {
         return {
-          localVideoFolder: "On My iPhone > Movie Stream Downloader > Downloads",
+          localVideoFolder: "On My iPhone > Cinarip > Downloads",
           localSubfolder: "Downloads",
           nasHost: "",
           nasShare: "",
@@ -96,15 +99,56 @@
     },
     saveNasCredentials: async (payload) =>
       MovieEngine.connectNas({
-        username: payload?.username,
-        password: payload?.password
+        host: payload?.nasHost || payload?.host,
+        share: payload?.nasShare || payload?.share,
+        path: payload?.nasPath || payload?.path,
+        username: payload?.username || payload?.nasUsername,
+        password: payload?.password || payload?.nasPassword
       }),
     getSiteCredentials,
     saveSiteCredentials,
-    siteLogin: async () => ({ ok: true }),
+    siteLogin: async (payload = {}) => {
+      const stored = await getSiteCredentials();
+      const full = await (async () => {
+        try {
+          const raw = await Preferences?.get({ key: "site_credentials" });
+          return raw?.value ? JSON.parse(raw.value) : {};
+        } catch {
+          return {};
+        }
+      })();
+      const username = String(payload.username || full.username || stored.username || "").trim();
+      const password = String(payload.password || full.password || "");
+      if (!username || !password) {
+        return { ok: false, error: "Enter username and password first." };
+      }
+      if (typeof MovieEngine.rememberSiteCredentials === "function") {
+        await MovieEngine.rememberSiteCredentials({ username, password });
+      }
+
+      if (typeof MovieEngine.openSiteLogin === "function") {
+        const interactive = await MovieEngine.openSiteLogin({ username, password });
+        if (interactive?.ok) return interactive;
+        if (interactive?.error && !/not ready|unimplemented/i.test(String(interactive.error))) {
+          return interactive;
+        }
+      }
+
+      return {
+        ok: false,
+        error: "Rebuild the app in Xcode to open Tornado’s login page and complete the captcha."
+      };
+    },
     closeWindow: () => {
       window.location.href = "index.html";
     },
-    testNasWrite: (payload) => MovieEngine.testNasWrite(payload || {})
+    testNasWrite: (payload) =>
+      MovieEngine.testNasWrite({
+        host: payload?.nasHost || payload?.host,
+        share: payload?.nasShare || payload?.share,
+        path: payload?.nasPath || payload?.path,
+        username: payload?.nasUsername || payload?.username,
+        password: payload?.nasPassword || payload?.password
+      })
   };
 })();

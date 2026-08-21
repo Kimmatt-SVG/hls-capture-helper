@@ -236,23 +236,14 @@ function setupTornadoDownloadScraper(contents) {
   contents.on("did-finish-load", inject);
 }
 
-async function fetchDirectLinksForMovie(contents, movieUrl) {
-  if (!contents || contents.isDestroyed()) {
-    return { ok: false, error: "Browser is not ready.", links: [] };
-  }
-
-  const canonicalUrl = canonicalMoviePageUrl(movieUrl) || canonicalContentUrl(movieUrl) || movieUrl;
-  const downloadIds = extractDownloadIds(canonicalUrl);
-  const movieId = downloadIds[0] || extractMovieIdFromUrl(canonicalUrl) || extractGetbuttonId(canonicalUrl || movieUrl);
-  if (!movieId) {
-    return { ok: false, error: "Invalid content URL (missing download ID).", links: [] };
-  }
-
-  await contents.executeJavaScript(buildTornadoDownloadScraperScript()).catch(() => {});
-
-  const script = `
-    (async () => {
-      const downloadIds = ${JSON.stringify(downloadIds)};
+function buildFetchDirectLinksBody(downloadIds = []) {
+  return `
+      const downloadIds = (() => {
+        const injected = ${JSON.stringify(downloadIds)};
+        if (injected.length) return injected;
+        const match = (window.location.pathname || "").match(/\\/movie\\/[^/]+\\/([^/]+)/i);
+        return match ? [match[1]] : [];
+      })();
       const types = ${JSON.stringify(GETBUTTON_TYPES)};
       const links = new Set();
       const attempts = [];
@@ -545,8 +536,32 @@ async function fetchDirectLinksForMovie(contents, movieUrl) {
         maxHeight: maxLinkHeight(),
         links: [...links]
       };
-    })()
   `;
+}
+
+function buildFetchDirectLinksScript(downloadIds = []) {
+  return `(async () => {${buildFetchDirectLinksBody(downloadIds)}})()`;
+}
+
+function buildFetchDirectLinksRunnerDefinition() {
+  return `async () => {${buildFetchDirectLinksBody([])}}`;
+}
+
+async function fetchDirectLinksForMovie(contents, movieUrl) {
+  if (!contents || contents.isDestroyed()) {
+    return { ok: false, error: "Browser is not ready.", links: [] };
+  }
+
+  const canonicalUrl = canonicalMoviePageUrl(movieUrl) || canonicalContentUrl(movieUrl) || movieUrl;
+  const downloadIds = extractDownloadIds(canonicalUrl);
+  const movieId = downloadIds[0] || extractMovieIdFromUrl(canonicalUrl) || extractGetbuttonId(canonicalUrl || movieUrl);
+  if (!movieId) {
+    return { ok: false, error: "Invalid content URL (missing download ID).", links: [] };
+  }
+
+  await contents.executeJavaScript(buildTornadoDownloadScraperScript()).catch(() => {});
+
+  const script = buildFetchDirectLinksScript(downloadIds);
 
   try {
     return await contents.executeJavaScript(script);
@@ -579,6 +594,8 @@ module.exports = {
   GETBUTTON_TYPES,
   extractMovieIdFromUrl,
   buildTornadoDownloadScraperScript,
+  buildFetchDirectLinksScript,
+  buildFetchDirectLinksRunnerDefinition,
   setupTornadoDownloadScraper,
   fetchDirectLinksForMovie,
   scanDirectDownloads

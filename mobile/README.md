@@ -1,6 +1,6 @@
 # iOS App
 
-Capacitor-based iOS port of Movie Stream Downloader.
+Capacitor-based iOS port of Cinarip.
 
 ## Features in this branch
 
@@ -35,7 +35,7 @@ The first run will:
 
 Open **Settings** in the app:
 
-- **App download folder**: videos save to `Downloads` inside the app’s iPhone storage. Open it from Settings → **Open in Files** or in Files under **On My iPhone → Movie Stream Downloader → Downloads**.
+- **App download folder**: videos save to `Downloads` inside the app’s iPhone storage. Open it from Settings → **Open in Files** or in Files under **On My iPhone → Cinarip → Downloads**.
 - **NAS connection**: enter host, share, remote folder, username, and password, then tap **Connect NAS** or **Test Write**.
 
 iOS does not mount SMB shares system-wide like macOS Finder. The app connects directly over SMB using the credentials you save in Settings.

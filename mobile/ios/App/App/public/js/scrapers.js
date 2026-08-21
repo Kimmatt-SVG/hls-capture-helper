@@ -532,6 +532,219 @@ window.mobileScrapers = {
 })();
 
   },
+  installDownload() {
+    
+(() => {
+  if (window.__tornadoDirectDownloadScraperInstalled) return;
+  window.__tornadoDirectDownloadScraperInstalled = true;
+
+  const isContentPage = () => /\/(?:movie|tv-series|tv|serie|series|episode|episodes)\//i.test(
+    window.location.pathname
+  );
+
+  const isMoviePage = () => /\/movie\//i.test(window.location.pathname);
+
+  const movieIdFromPath = () => {
+    const match = window.location.pathname.match(/\/movie\/[^/]+\/([^/]+)/i);
+    return match ? match[1] : null;
+  };
+
+  const pushDirectLink = (url, source) => {
+    if (!url || !/loadshare\.org\/download\//i.test(url)) return;
+    window.__tornadoCollectedLinks = window.__tornadoCollectedLinks || new Set();
+    window.__tornadoCollectedLinks.add(url);
+    console.log("[TornadoDirectDownload]", JSON.stringify({
+      ts: new Date().toISOString(),
+      url,
+      source
+    }));
+  };
+
+  const collectFromText = (text, source) => {
+    if (!text || !/loadshare\.org/i.test(text)) return;
+    const matches = String(text).match(/https?:\/\/[^\s"'<>]*loadshare\.org\/download\/[^\s"'<>]+/gi);
+    if (!matches) return;
+    for (const url of matches) pushDirectLink(url, source);
+  };
+
+  const collectFromDom = () => {
+    if (!isContentPage()) return;
+
+    const found = new Set();
+    for (const element of document.querySelectorAll("a[href], [data-href], [data-url]")) {
+      for (const attr of ["href", "data-href", "data-url"]) {
+        const value = element.getAttribute(attr);
+        if (value && /loadshare\.org\/download\//i.test(value)) {
+          found.add(value);
+        }
+      }
+    }
+
+    collectFromText(document.documentElement?.innerHTML || "", "html-scan");
+    for (const url of found) pushDirectLink(url, "dom");
+  };
+
+  const hookAjax = () => {
+    if (!window.jQuery) {
+      setTimeout(hookAjax, 250);
+      return;
+    }
+
+    window.jQuery(document).ajaxSuccess((_event, _xhr, settings, data) => {
+      const url = String(settings?.url || "");
+      if (/loadshare|getbutton|getlink|download|player/i.test(url) || /loadshare/i.test(String(data))) {
+        if (typeof data === "string") {
+          collectFromText(data, "ajax:" + url);
+        } else if (data != null) {
+          try {
+            collectFromText(JSON.stringify(data), "ajax-json:" + url);
+          } catch {
+            // Ignore serialization failures.
+          }
+        }
+      }
+    });
+  };
+
+  const tryPlayerApis = () => {
+    if (!window.Player) return { ok: false, status: "player-missing" };
+
+    const actions = [];
+    if (typeof window.Player.getLinks === "function") {
+      try {
+        window.Player.getLinks();
+        actions.push("getLinks");
+      } catch (error) {
+        actions.push("getLinks-error:" + String(error?.message || error));
+      }
+    }
+
+    if (typeof window.Player.requestLink === "function") {
+      try {
+        window.Player.requestLink();
+        actions.push("requestLink");
+      } catch (error) {
+        actions.push("requestLink-error:" + String(error?.message || error));
+      }
+    }
+
+    return { ok: actions.length > 0, actions };
+  };
+
+  const fetchGetbuttonLinks = (forcedId) => {
+    const id =
+      forcedId ||
+      document.querySelector("#player .play_button[data-id]")?.getAttribute("data-id") ||
+      document.querySelector(".play_button[data-id]")?.getAttribute("data-id") ||
+      movieIdFromPath();
+
+    if (!id) {
+      return Promise.resolve({ ok: false, reason: "missing-movie-id" });
+    }
+
+    if (!window.jQuery) {
+      return Promise.resolve({ ok: false, reason: "missing-jquery" });
+    }
+
+    const clickCloudTriggers = () => {
+      const selectors = [
+        "#click_to_download",
+        ".download_drop",
+        ".fa-cloud-download",
+        ".fa-cloud-download-alt",
+        ".fa-cloud",
+        "[class*='cloud-download']",
+        "[class*='download-cloud']",
+        "#player [class*='cloud']",
+        "#player [class*='download']"
+      ];
+      for (const selector of selectors) {
+        for (const element of document.querySelectorAll(selector)) {
+          try {
+            element.click();
+          } catch {}
+        }
+      }
+    };
+
+    const tryApi = (path, dataType) =>
+      new Promise((resolve) => {
+        window.jQuery.ajax({
+          url: "/" + path + "/" + id + "/true",
+          type: "get",
+          dataType,
+          timeout: 15000,
+          success: (data) => resolve({ ok: true, path, data }),
+          error: () => resolve({ ok: false, path })
+        });
+      });
+
+    return (async () => {
+      clickCloudTriggers();
+      const getdownload = await tryApi("getdownload", "json");
+      if (getdownload.ok) {
+        if (typeof getdownload.data === "string") collectFromText(getdownload.data, "getdownload");
+        else {
+          try {
+            collectFromText(JSON.stringify(getdownload.data), "getdownload-json");
+          } catch {}
+        }
+      }
+
+      const getbutton = await tryApi("getbutton", "html");
+      if (getbutton.ok && typeof getbutton.data === "string") {
+        const html = String(getbutton.data || "");
+        collectFromText(html, "getbutton");
+        const temp = document.createElement("div");
+        temp.innerHTML = html;
+        for (const element of temp.querySelectorAll("a[href], [data-href], [data-url]")) {
+          for (const attr of ["href", "data-href", "data-url"]) {
+            const value = element.getAttribute(attr);
+            if (value && /loadshare\.org\/download\//i.test(value)) {
+              pushDirectLink(value, "getbutton-dom");
+            }
+          }
+          collectFromText(element.outerHTML || "", "getbutton-element");
+        }
+        const trigger = temp.querySelector("#click_to_download") || temp.querySelector("[class*='cloud']");
+        if (trigger) {
+          try {
+            trigger.click();
+          } catch {}
+        }
+      }
+
+      return { ok: true, movieId: id, getdownload: getdownload.ok, getbutton: getbutton.ok };
+    })();
+  };
+
+  window.__tornadoScanDirectDownloads = async (forcedMovieId) => {
+    if (!isContentPage() && !forcedMovieId) {
+      return { ok: false, reason: "not-content-page", links: [] };
+    }
+
+    window.__tornadoCollectedLinks = new Set();
+    collectFromDom();
+    const player = tryPlayerApis();
+    const getbutton = await fetchGetbuttonLinks(forcedMovieId || null);
+    collectFromDom();
+
+    return {
+      ok: true,
+      player,
+      getbutton,
+      linkCount: document.querySelectorAll('a[href*="loadshare.org/download/"]').length,
+      links: [...(window.__tornadoCollectedLinks || [])]
+    };
+  };
+
+  if (isContentPage()) {
+    hookAjax();
+    collectFromDom();
+  }
+})();
+
+  },
   async scrapeSearch() {
     this.installSearch();
     return window.__tornadoScrapeSearchMovies?.() || { ok: false, movies: [] };
@@ -543,5 +756,144 @@ window.mobileScrapers = {
   async scrapeTvSeason() {
     this.installTv();
     return window.__tornadoScanTvShow?.() || { ok: false, episodes: [] };
+  },
+  async fetchDirectLinks() {
+    this.installDownload();
+    const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+    const waitStart = Date.now();
+    while (Date.now() - waitStart < 5000 && !window.jQuery) {
+      await sleep(200);
+    }
+    const jqueryReady = Boolean(window.jQuery);
+    const play = document.querySelector("#player .play_button[data-id], .play_button[data-id]");
+    const forced = Array.isArray(window.__forcedDownloadIds) ? window.__forcedDownloadIds.map(String) : [];
+    if (window.__forcedDownloadId) forced.unshift(String(window.__forcedDownloadId));
+    const playId = play && play.getAttribute("data-id");
+    const pathId =
+      ((location.pathname || "").match(/\/([A-Za-z0-9]+)-watching\.html?/i) || [])[1] ||
+      ((location.pathname || "").match(/\/movie\/[^/]+\/([^/]+)/i) || [])[1] ||
+      ((location.pathname || "").match(/\/(?:tv-series|tv|serie|series)\/[^/]+\/([^/]+)/i) || [])[1];
+    const ids = [...new Set(forced.concat(playId || "", pathId || "").filter(Boolean))];
+    const id = ids[0] || "";
+    const type = (play && play.getAttribute("data-type")) || "true";
+    const hooked = () => Array.from(window.__tornadoCollectedLinks || []);
+    const fromDom = () => Array.from(document.querySelectorAll("a[href*='loadshare.org/download/']")).map((a) => a.href);
+    const uniqueLinks = () => [...new Set(hooked().concat(fromDom()))].filter((url) => /loadshare\.org\/download\//i.test(String(url)));
+    const pageUrl = String(location.href || "");
+    const loggedOut =
+      /premiummembership/i.test(document.body ? document.body.innerHTML : "") &&
+      !document.querySelector('a[href*="logout"], a[href*="signout"]');
+
+    if (!jqueryReady) {
+      return { ok: false, reason: "missing-jquery", links: uniqueLinks(), jqueryReady, loggedOut, movieId: id || null, pageUrl };
+    }
+    if (!id) {
+      return { ok: false, reason: "missing-movie-id", links: uniqueLinks(), jqueryReady, loggedOut, movieId: null, pageUrl };
+    }
+
+    const loginWaitStart = Date.now();
+    while (Date.now() - loginWaitStart < 4500) {
+      if (document.querySelector('a[href*="logout"], a[href*="signout"]')) break;
+      if (window.__tornadoLoginDone) break;
+      if (!window.__tornadoLoginStarted) break;
+      await sleep(250);
+    }
+
+    if (typeof window.initDownloadButton === "function") {
+      try { ids.forEach(function(nextId) { window.initDownloadButton(nextId, type); }); } catch (error) {}
+    }
+
+    let html = "";
+    for (const nextId of ids) {
+      const getDownloadJson = new Promise((resolve) => {
+        window.jQuery.ajax({
+          url: "/getdownload/" + nextId + "/" + type,
+          type: "get",
+          dataType: "json",
+          timeout: 8000,
+          success: (data) => resolve(data),
+          error: () => resolve(null)
+        });
+      });
+      const getButtonHtml = new Promise((resolve) => {
+        window.jQuery.ajax({
+          url: "/getbutton/" + nextId + "/" + type,
+          type: "get",
+          dataType: "html",
+          timeout: 10000,
+          success: (data) => resolve(String(data || "")),
+          error: () => resolve("")
+        });
+      });
+      const [downloadJson, buttonHtml] = await Promise.all([getDownloadJson, getButtonHtml]);
+      if (downloadJson) {
+        try {
+          const text = typeof downloadJson === "string" ? downloadJson : JSON.stringify(downloadJson);
+          const matches = String(text).match(/(?:https?:)?\/\/[^\s"'<>]*loadshare\.org\/download\/[^\s"'<>]+/gi) || [];
+          for (const url of matches) {
+            const clean = url.indexOf("//") === 0 ? "https:" + url : url;
+            (window.__tornadoCollectedLinks || (window.__tornadoCollectedLinks = new Set())).add(clean);
+          }
+        } catch (error) {}
+      }
+      if (buttonHtml) html = buttonHtml;
+      if (uniqueLinks().length) break;
+      if (buttonHtml && /premiummembership/i.test(buttonHtml) && !document.querySelector('a[href*="logout"], a[href*="signout"]')) {
+        return {
+          ok: false,
+          links: uniqueLinks(),
+          jqueryReady,
+          loggedOut: true,
+          movieId: nextId,
+          pageUrl,
+          getbutton: true,
+          error: "Not signed in on Tornado. Save Site Login, then try again."
+        };
+      }
+      if (buttonHtml) {
+        const htmlLinks = String(buttonHtml).match(/(?:https?:)?\/\/[^\s"'<>]*loadshare\.org\/download\/[^\s"'<>]+/gi) || [];
+        for (const url of htmlLinks) {
+          const clean = url.indexOf("//") === 0 ? "https:" + url : url;
+          (window.__tornadoCollectedLinks || (window.__tornadoCollectedLinks = new Set())).add(clean);
+        }
+        let mount = document.getElementById("__ios_getbutton_mount");
+        if (!mount) {
+          mount = document.createElement("div");
+          mount.id = "__ios_getbutton_mount";
+          mount.style.cssText = "position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden;";
+          document.body.appendChild(mount);
+        }
+        mount.innerHTML = buttonHtml;
+        const trigger =
+          mount.querySelector("#click_to_download") ||
+          mount.querySelector("[class*='cloud']") ||
+          document.querySelector("#click_to_download");
+        if (trigger) {
+          try { trigger.click(); } catch (error) {}
+        }
+        const pollStart = Date.now();
+        while (Date.now() - pollStart < 5000) {
+          if (uniqueLinks().length) break;
+          await sleep(250);
+        }
+        if (uniqueLinks().length) break;
+      }
+    }
+
+    const links = uniqueLinks();
+    return {
+      ok: links.length > 0,
+      links,
+      jqueryReady,
+      loggedOut,
+      movieId: id,
+      pageUrl,
+      getbutton: Boolean(html),
+      error: links.length
+        ? null
+        : loggedOut
+          ? "Not signed in on Tornado. Save Site Login, then try again."
+          : (html ? "No direct download link found." : "getbutton returned no download button.")
+    };
   }
 };

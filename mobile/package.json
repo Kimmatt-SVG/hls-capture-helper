@@ -14,6 +14,7 @@
     "@capacitor/core": "^6.2.0",
     "@capacitor/filesystem": "^6.0.3",
     "@capacitor/ios": "^6.2.0",
+    "@capacitor/keyboard": "^6.0.4",
     "@capacitor/preferences": "^6.0.3",
     "@capacitor/status-bar": "^6.0.2",
     "movie-engine": "file:plugins/movie-engine"

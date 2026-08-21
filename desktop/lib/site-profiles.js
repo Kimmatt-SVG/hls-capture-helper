@@ -3,7 +3,7 @@ const path = require("path");
 
 const MOVIES_PROFILE = {
   id: "movies",
-  windowTitle: "Movie Stream Downloader",
+  windowTitle: "Cinarip",
   outputFolder: "Movies",
   browserPartition: "persist:stream-browser",
   homeUrl:
@@ -12,7 +12,7 @@ const MOVIES_PROFILE = {
     "https://www4.tornadomovies.co/tornado-1",
   loginPath: "/user/premiummembership",
   searchPathTemplate: "/search_all/~{query}~",
-  brandLabel: "Movie Stream Downloader",
+  brandLabel: "Cinarip",
   siteLabel: "Tornado Movies",
   searchPlaceholder: "Search movies & TV (e.g. the last of us)",
   landingTitle: "What do you want to watch?",

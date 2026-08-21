@@ -3,11 +3,14 @@
 
   function applyMobileChrome(view) {
     document.body.dataset.catalogView = view;
-    document.body.classList.toggle("catalog-subview", view !== "home");
+    const chromeHidden = view === "library" || view === "detail";
+    document.body.classList.toggle("catalog-subview", chromeHidden);
     const searchForm = document.getElementById("toolbar-search-form");
-    if (searchForm) searchForm.hidden = view !== "home";
+    if (searchForm) searchForm.hidden = chromeHidden;
     const openLibrary = document.getElementById("open-library");
     if (openLibrary) openLibrary.hidden = view === "library";
+    const toolbar = document.querySelector(".mobile-toolbar");
+    if (toolbar) toolbar.hidden = chromeHidden;
   }
 
   function showCatalogViewFallback(view) {
@@ -87,6 +90,10 @@
 
   window.addEventListener("unhandledrejection", (event) => {
     const message = event.reason?.message || String(event.reason || "Unknown error");
+    if (/scrape timed out|unsupported type|cancelled/i.test(message)) {
+      event.preventDefault?.();
+      return;
+    }
     const log = document.getElementById("activity-log");
     if (!log) return;
     const empty = log.querySelector(".activity-log-empty");

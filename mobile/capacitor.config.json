@@ -1,16 +1,21 @@
 {
   "appId": "com.movieengine.streamdownloader.ios",
-  "appName": "Movie Stream Downloader",
+  "appName": "Cinarip",
   "webDir": "www",
   "ios": {
-    "contentInset": "automatic",
-    "backgroundColor": "#10131a",
+    "contentInset": "never",
+    "backgroundColor": "#0a0a12",
     "scrollEnabled": true
   },
   "plugins": {
     "StatusBar": {
       "style": "DARK",
-      "backgroundColor": "#10131a"
+      "backgroundColor": "#0a0a12",
+      "overlaysWebView": true
+    },
+    "Keyboard": {
+      "resize": "none",
+      "style": "DARK"
     }
   }
 }

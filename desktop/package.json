@@ -21,7 +21,7 @@
   },
   "build": {
     "appId": "com.movieengine.streamdownloader",
-    "productName": "Movie Stream Downloader",
+    "productName": "Cinarip",
     "directories": {
       "output": "dist"
     },
@@ -85,7 +85,7 @@
       "hardenedRuntime": false
     },
     "dmg": {
-      "title": "Movie Stream Downloader"
+      "title": "Cinarip"
     }
   },
   "allowScripts": {
